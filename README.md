@@ -7,11 +7,13 @@ First target: IAPP **CIPP/US**. Later: China bar exam (法考). See [docs/design
 
 ## Status
 
-Build step 1 of the plan: the installable app shell.
+Build steps 1–2 of the plan are done:
 
 - Installs on Android and laptop (Chrome), and opens offline
 - Settings: save and check a Gemini API key (stored only on the device)
-- Book import, questions and study modes arrive in the next steps
+- Book: import a DRM-free EPUB, browse its contents, search it, and read it with
+  chapter/section and print page numbers (when the EPUB has them)
+- Questions and study modes arrive in the next steps
 
 ## Using it
 
@@ -19,6 +21,7 @@ Open the app at **https://learner-agent-sudo.github.io/rev-exam/** in Chrome, th
 
 1. Install it: Chrome menu ⋮ → "Install app" / "Add to home screen".
 2. Settings → paste a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey) → "Save and check".
+3. Book → choose your textbook's EPUB file (best done on the laptop).
 
 ## What never goes in this repo
 

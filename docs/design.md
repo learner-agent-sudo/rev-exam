@@ -1,7 +1,7 @@
 # Exam Revision Tool — Design (draft)
 
-Status: brainstorm / draft. No code yet.
-Last updated: 2026-09-27
+Status: in progress. Build steps 1–2 done (app shell, book import and reader).
+Last updated: 2026-09-28
 
 ## 1. Goal
 
@@ -33,6 +33,7 @@ and always backs each answer with the **exact passage** from the source.
 | China bar references | Keep scope small: past-paper explanations only, no statute database yet |
 | Exam date | None booked; tool is for ongoing revision |
 | Code | Written and maintained by Claude, pushed in small pieces |
+| Device roles | Laptop: import book, create questions, written answers. Phone: multiple-choice study. Both sync |
 
 ## 3. Architecture
 
@@ -54,10 +55,14 @@ Practice, mock exams and reading passages then work fully offline.
 
 ## 4. CIPP/US pipeline
 
-1. **Import EPUB.** The app splits the book into passages. Each passage keeps:
-   - its original text
-   - its location: chapter › section › paragraph (plus print page number only if the EPUB includes page markers)
-   - its neighbours, so "read more" can show surrounding text
+1. **Import EPUB.** Done in the browser (JSZip + DOMParser). The app splits the book into blocks
+   (headings, paragraphs, list items, tables) in reading order. Each block keeps:
+   - its original text (whitespace tidied; bold/italic and images are not kept)
+   - its location: chapter › section › subsection, from the contents list and the headings
+   - the print page number, only when the EPUB includes page markers
+   - its position, so the reader can open the surrounding text and highlight it
+     (`#/book/read/<book>/<block>?mark=1`; question references will use the same link)
+   Copy-protected (DRM) files are detected and refused with a clear message.
 2. **Tag passages by exam topic.** Gemini assigns each passage to a Body of Knowledge
    topic (e.g. I.B, II.C). The book's chapters do not map 1:1 to the exam topics.
 3. **Generate questions** following the blueprint's question ranges per topic:
@@ -145,6 +150,9 @@ and service to maintain, with no real benefit for a single user.
 
 - AI-generated questions can still be wrong despite the check step. Flagging is essential.
 - References show chapter/section; page numbers only if the EPUB has them.
+- The EPUB reader was tested on 20 public sample EPUBs (W3C EPUB 3 samples) and synthetic
+  EPUB 2/3 files, not on the real CIPP/US textbook. Import time in Chrome: under ~1.5 s for
+  textbook-sized books on a laptop.
 - The IAPP blueprint changes between versions. The tool stores the blueprint as editable
   data so it can be updated.
 - Claude can test the app with a public-domain book and simulated Gemini replies, but not
@@ -154,21 +162,24 @@ and service to maintain, with no real benefit for a single user.
 
 ## 11. Build plan (small pieces, pushed one at a time)
 
-1. App shell: installable, works offline, Settings screen for the Gemini key
-2. EPUB import and a book reader view
+Sync moved earlier (owner's decision, 2026-09-28): the phone is for studying, so it needs
+the laptop's question bank as soon as practice mode exists.
+
+1. ✅ App shell: installable, works offline, Settings screen for the Gemini key
+2. ✅ EPUB import, contents, search and a book reader view
 3. Body of Knowledge data and passage tagging
 4. Question generation and checking
-5. Practice mode with passages
-6. Exam mode with results by topic
-7. Revision features: notebook, confidence, spaced review, weak areas
-8. Google Drive sync
+5. Practice mode with passages (phone-first)
+6. Google Drive sync
+7. Exam mode with results by topic
+8. Revision features: notebook, confidence, spaced review, weak areas
 9. China bar exam mode
 10. Stage 2: written-answer grading
 
 ## 12. Open items
 
 - [ ] Owner gets a Gemini API key from Google AI Studio
-- [ ] Owner confirms Google Drive for sync
+- [x] Owner confirms Google Drive for sync
 - [ ] Get the official CIPP/US Body of Knowledge 2.6.1 and Exam Blueprint 2.5.0
       (in effect since 1 Sept 2025) from iapp.org, for the full per-topic question ranges
 - [ ] Owner finds downloadable China bar past papers (for stage 1b)
