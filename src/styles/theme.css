@@ -660,3 +660,298 @@ ol.howto li {
     transition: none !important;
   }
 }
+
+/* ---------- Book: import, contents, search ---------- */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dropzone {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  margin: 16px 0 8px;
+  padding: 28px 16px;
+  border: 1.5px dashed var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper);
+  text-align: center;
+  cursor: pointer;
+  font-weight: 400;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dropzone:hover,
+.dropzone.over,
+.dropzone:focus-within {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.dropzone.busy {
+  cursor: progress;
+}
+
+.dropzone-title {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 1.02rem;
+  color: var(--accent);
+}
+
+.progress {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.progress progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--accent);
+}
+
+.book-title {
+  font-size: 1.6rem;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+details.more {
+  padding: 0;
+  box-shadow: none;
+}
+
+details.more > summary {
+  padding: 16px 20px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  color: var(--accent);
+}
+
+details.more > .card {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: none;
+}
+
+ol.toc {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  font-size: 0.97rem;
+}
+
+ol.toc li {
+  border-bottom: 1px dotted var(--rule);
+}
+
+ol.toc a {
+  display: block;
+  padding: 9px 2px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+ol.toc a:hover {
+  color: var(--accent);
+}
+
+ol.toc .toc-depth-0 a {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+ol.toc .toc-depth-1 a {
+  padding-left: 18px;
+  color: var(--ink-soft);
+}
+
+ol.toc .toc-depth-2 a,
+ol.toc .toc-depth-3 a {
+  padding-left: 36px;
+  color: var(--ink-faint);
+  font-size: 0.92rem;
+}
+
+.results {
+  margin-top: 14px;
+}
+
+ol.hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+ol.hits li + li {
+  border-top: 1px solid var(--rule);
+}
+
+ol.hits a {
+  display: grid;
+  gap: 2px;
+  padding: 12px 2px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+ol.hits a:hover .hit-text {
+  color: var(--accent);
+}
+
+.hit-where {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.78rem;
+}
+
+.hit-text {
+  font-size: 0.95rem;
+}
+
+mark {
+  background: color-mix(in srgb, var(--highlight) 70%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* ---------- Reader ---------- */
+
+.reader-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+  font-family: var(--font-ui);
+  font-size: 0.92rem;
+}
+
+.reader-top a {
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.crumbs {
+  margin: 0 0 20px;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
+}
+
+.reader-body {
+  max-width: 38em;
+  font-size: 1.1rem;
+  line-height: 1.75;
+}
+
+.reader-body h2,
+.reader-body h3,
+.reader-body h4 {
+  margin: 1.6em 0 0.6em;
+  scroll-margin-top: 90px;
+}
+
+.reader-body h2:first-child,
+.reader-body h3:first-child,
+.reader-body h4:first-child {
+  margin-top: 0.2em;
+}
+
+.reader-body p {
+  margin: 0 0 1em;
+  scroll-margin-top: 90px;
+}
+
+.reader-body p.li {
+  position: relative;
+  padding-left: 1.3em;
+  margin-bottom: 0.5em;
+}
+
+.reader-body p.li::before {
+  content: '•';
+  position: absolute;
+  left: 0.3em;
+  color: var(--ink-faint);
+}
+
+.page-mark {
+  float: right;
+  margin: 0.25em 0 0.25em 0.8em;
+  padding: 0 6px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  margin: 0 0 1.2em;
+  scroll-margin-top: 90px;
+}
+
+.table-wrap table {
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.table-wrap td {
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+.table-wrap tr:first-child td {
+  background: var(--paper-sunk);
+  font-weight: 600;
+}
+
+/* The passage a search result or question points to: marked with the highlighter. */
+.reader-body .target {
+  --hl: color-mix(in srgb, var(--highlight) 50%, transparent);
+  background: var(--hl);
+  box-shadow: 0 0 0 8px var(--hl);
+  border-radius: 2px;
+  animation: highlight-in 0.6s ease-out both;
+}
+
+@keyframes highlight-in {
+  from {
+    background: transparent;
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+
+.reader-pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  max-width: 38em;
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule);
+}

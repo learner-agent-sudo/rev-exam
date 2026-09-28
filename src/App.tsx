@@ -1,7 +1,7 @@
 import type { ComponentType, SVGProps } from 'react'
 import { useOnline } from './app/device'
 import { BookIcon, BrandMark, HomeIcon, SettingsIcon, StudyIcon } from './app/icons'
-import { href, useRoute, type Route } from './app/router'
+import { href, useLocation, type Location, type Route } from './app/router'
 import { UpdateToast } from './app/UpdateToast'
 import { Book } from './screens/Book'
 import { Home } from './screens/Home'
@@ -15,7 +15,7 @@ const NAV: { route: Route; label: string; Icon: ComponentType<SVGProps<SVGSVGEle
   { route: 'settings', label: 'Settings', Icon: SettingsIcon },
 ]
 
-const SCREENS: Record<Route, ComponentType> = {
+const SCREENS: Record<Route, ComponentType<{ location: Location }>> = {
   home: Home,
   book: Book,
   study: Study,
@@ -23,7 +23,8 @@ const SCREENS: Record<Route, ComponentType> = {
 }
 
 export function App() {
-  const route = useRoute()
+  const location = useLocation()
+  const route = location.name
   const online = useOnline()
   const Screen = SCREENS[route]
 
@@ -47,7 +48,7 @@ export function App() {
       </nav>
 
       <main className="main" key={route}>
-        <Screen />
+        <Screen location={location} />
       </main>
 
       <UpdateToast />

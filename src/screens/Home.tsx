@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react'
 import { isInstalled, useInstallPrompt } from '../app/device'
 import { href } from '../app/router'
+import { listBooks } from '../book/store'
+import type { BookRow } from '../db/db'
 import { useSettings } from '../settings/useSettings'
 
 export function Home() {
@@ -7,6 +10,11 @@ export function Home() {
   const { canInstall, install } = useInstallPrompt()
   const installed = isInstalled()
   const hasKey = Boolean(settings.geminiApiKey)
+  const [books, setBooks] = useState<BookRow[] | null>(null)
+  useEffect(() => {
+    listBooks().then(setBooks)
+  }, [])
+  const book = books?.[0]
 
   return (
     <div className="page">
@@ -64,13 +72,30 @@ export function Home() {
               )}
             </div>
           </li>
-          <li className="later">
+          <li className={book ? 'done' : ''}>
             <span className="step-title">Import your book</span>
-            <div className="step-body">Coming in the next build step.</div>
+            <div className="step-body">
+              {books === null ? (
+                'Checking…'
+              ) : book ? (
+                <>
+                  Imported “{book.title}”. <a href={href('book')}>Open it</a>.
+                </>
+              ) : (
+                <>
+                  Best done on your laptop: choose the book's EPUB file.
+                  <div className="row">
+                    <a className="btn btn-quiet" href={href('book')}>
+                      Import book
+                    </a>
+                  </div>
+                </>
+              )}
+            </div>
           </li>
           <li className="later">
             <span className="step-title">Create questions</span>
-            <div className="step-body">Coming after the book import.</div>
+            <div className="step-body">Coming in a later build step.</div>
           </li>
         </ol>
       </section>

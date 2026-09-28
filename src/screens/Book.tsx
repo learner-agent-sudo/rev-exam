@@ -1,18 +1,18 @@
-import { BookIcon } from '../app/icons'
+import type { Location } from '../app/router'
+import { Library } from './book/Library'
+import { Reader } from './book/Reader'
 
-export function Book() {
-  return (
-    <div className="page">
-      <p className="eyebrow">Your book</p>
-      <h1>Book</h1>
-      <section className="card empty">
-        <BookIcon />
-        <h2>No book yet</h2>
-        <p className="muted">
-          Next build step: import your EPUB here. The app will split it into passages you can read, and that questions
-          will quote word for word.
-        </p>
-      </section>
-    </div>
-  )
+export function Book({ location }: { location: Location }) {
+  const [view, bookId, index] = location.params
+  if (view === 'read' && bookId) {
+    return (
+      <Reader
+        bookId={bookId}
+        index={Number(index) || 0}
+        mark={location.query.get('mark') === '1'}
+        query={location.query.get('q') ?? ''}
+      />
+    )
+  }
+  return <Library query={location.query.get('q') ?? ''} />
 }
