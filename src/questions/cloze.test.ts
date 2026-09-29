@@ -35,6 +35,41 @@ describe('findTerms', () => {
   it('ignores roman numerals and single capitals', () => {
     expect(terms('Title V and Part II of the rule apply to I and A.')).toEqual([])
   })
+
+  it('ignores capitals used for emphasis', () => {
+    expect(terms('(SULKY AND SLEEPY) Don’t know where it is.')).toEqual([])
+    expect(terms('But THAT was all he said to the crew.')).toEqual([])
+    expect(terms('The CCPA and the GDPR differ.')).toEqual(['acronym:CCPA', 'acronym:GDPR'])
+  })
+})
+
+describe('generateCloze filters', () => {
+  const block = (index: number, text: string): BlockRow => ({ bookId: 'b', index, kind: 'paragraph', path: ['Ch 1'], text })
+
+  it('skips code and markup', () => {
+    const blocks = [
+      block(0, "hr.transition { background: url('x.gif') no-repeat 50% 50%; height: 1em; margin: 0.5em 0em; }"),
+      block(1, '<p aria-live="true">Your current score from the FTC is 50% today.</p>'),
+    ]
+    expect(generateCloze('b', blocks)).toEqual([])
+  })
+
+  it('offers years close to the right one', () => {
+    const years = [1950, 1960, 1970, 1980, 1995, 1996, 1997, 1998, 1999, 2000, 2001]
+    const blocks = years.map((y, i) => block(i, `The committee reviewed the privacy rules again in ${y} after many complaints.`))
+    const question = generateCloze('b', blocks).find((q) => q.options[q.answer] === '1998')!
+    for (const option of question.options) expect(Math.abs(Number(option) - 1998)).toBeLessThanOrEqual(3)
+  })
+
+  it('uses one answer at most four times, so a common term cannot flood the bank', () => {
+    const laws = ['Fair Credit Reporting Act', 'Video Privacy Protection Act', 'Gramm-Leach-Bliley Act']
+    const blocks = [
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => block(n, `Federal agencies must follow the Privacy Act for record system number ${'I'.repeat(n)} about people.`)),
+      ...laws.map((law, i) => block(20 + i, `The ${law} sets rules that many companies must follow every single day.`)),
+    ]
+    const answers = generateCloze('b', blocks).map((q) => q.options[q.answer])
+    expect(answers.filter((a) => a === 'Privacy Act')).toHaveLength(4)
+  })
 })
 
 describe('generateCloze', async () => {

@@ -36,6 +36,18 @@ const NUMBER =
 
 const LEADING_WORDS = /^(?:The|A|An|This|That|These|Those|Its|Their|Under|In|By|Since|Unlike|Like|Both|Each|Also|Only|When|While|After|Before|Although|However|Because|If|As|For|Of|And|To|On|the|of|and|for|to|on|in)\s+/
 const NOT_ACRONYMS = new Set(['I', 'A', 'US', 'USA', 'OK', 'AM', 'PM', 'TV', 'ID', 'IT', 'ISBN', 'PDF', 'URL', 'HTML', 'NOTE', 'TIP'])
+// Common words books set in capitals for emphasis ("THAT", "HERE") are not acronyms.
+const COMMON_WORDS = new Set(
+  (
+    'THE AND THAT THIS THESE THOSE THEY THEM THEIR THERE THEN THAN HERE WHERE WHEN WHAT WHO WHOM WHY HOW ' +
+    'HIM HIS HER HERS SHE YOU YOUR YOURS YE WE OUR OURS ARE WAS WERE BEEN BEING HAVE HAS HAD NOT BUT ' +
+    'FOR WITH FROM INTO ONTO UPON ALL ANY ONE TWO SOME MANY MUCH MORE MOST SUCH ONLY ALSO VERY JUST ' +
+    'WILL SHALL MAY CAN MUST YES NOW NEW OLD BIG END SEE SAY SAID MEN MAN BOOK PART CHAPTER SECTION ' +
+    'WARNING CAUTION IMPORTANT EXAMPLE FIGURE TABLE CASE STUDY ' +
+    'HE ME DO GO NO SO UP IS IN ON OF TO BE BY OR AN AT AS IF MY OH LAY'
+  ).split(' '),
+)
+const CAPS_WORD = /^[A-Z][A-Z0-9&’']{1,}$/
 const NUMBER_CUE = /(?:under|over|than|age|aged|least|within|to|up|about|approximately|nearly)\s+$/i
 const CITATION_CUE = /(?:Section|Sec\.|Title|Part|Chapter|Article|Art\.|§|No\.|Vol\.|p\.|pp\.)\s*$/
 
@@ -79,8 +91,12 @@ export function findTerms(sentence: string): Term[] {
   for (const pattern of AGENCIES) for (const m of sentence.matchAll(pattern)) add('agency', m[0], m.index)
   for (const m of sentence.matchAll(ACRONYM)) {
     const word = m[0]
-    if (NOT_ACRONYMS.has(word) || /^[IVXLCDM]+$/.test(word) || /^\d/.test(word)) continue
+    if (NOT_ACRONYMS.has(word) || COMMON_WORDS.has(word) || /^[IVXLCDM]+$/.test(word) || /^\d/.test(word)) continue
     if (!/[A-Z].*[A-Z]/.test(word)) continue
+    // Capitals next to other capitals are shouting or a heading ("SULKY AND SLEEPY"), not acronyms.
+    const before = /(\S+)\s+$/.exec(sentence.slice(0, m.index))?.[1]
+    const after = /^[’']?[A-Za-z]*\s+(\S+)/.exec(sentence.slice(m.index + word.length))?.[1]
+    if ((before && CAPS_WORD.test(before)) || (after && CAPS_WORD.test(after))) continue
     add('acronym', word, m.index)
   }
   for (const m of sentence.matchAll(YEAR)) add('year', m[0], m.index)
@@ -107,6 +123,8 @@ export function findTerms(sentence: string): Term[] {
 
 function eligibleSentence(sentence: string): boolean {
   if (sentence.length < 40 || sentence.length > 350) return false
+  // Code samples and markup make nonsense questions.
+  if (/[{}<>]|=\s*["']|;\s*$/.test(sentence)) return false
   if (sentence.split(/\s+/).length < 7) return false
   if (/:$/.test(sentence)) return false
   const letters = sentence.replace(/[^A-Za-z]/g, '')
@@ -121,6 +139,16 @@ function eligibleBlock(block: BlockRow): boolean {
 
 const poolKey = (term: Term) => (term.kind === 'number' ? `number:${term.unit}` : term.kind)
 
+const valueOf = (term: Term) => Number(term.text.replace(/[^0-9.]/g, '')) || 0
+
+/** How far apart two years or numbers are (numbers compared by ratio). */
+function distance(a: Term, b: Term): number {
+  const x = valueOf(a)
+  const y = valueOf(b)
+  if (a.kind === 'year') return Math.abs(x - y)
+  return Math.abs(Math.log((x + 1) / (y + 1)))
+}
+
 function related(a: string, b: string): boolean {
   return a === b || a.includes(b) || b.includes(a)
 }
@@ -128,15 +156,17 @@ function related(a: string, b: string): boolean {
 export interface ClozeOptions {
   /** Most questions taken from one passage. */
   perPassage?: number
+  /** Most questions with the same answer, so one busy term ("FTC") does not flood the bank. */
+  perAnswer?: number
   now?: number
 }
 
 export function generateCloze(bookId: string, blocks: BlockRow[], options: ClozeOptions = {}): QuestionRow[] {
-  const { perPassage = 2, now = Date.now() } = options
+  const { perPassage = 2, perAnswer = 4, now = Date.now() } = options
 
   // 1. Every candidate sentence and its terms, plus a pool of terms by kind for wrong options.
   const candidates: { block: BlockRow; sentence: string; terms: Term[]; chapter: string }[] = []
-  const pools = new Map<string, Map<string, { term: Term; chapters: Set<string> }>>()
+  const pools = new Map<string, Map<string, { term: Term; chapters: Set<string>; count: number }>>()
   for (const block of blocks) {
     if (!eligibleBlock(block)) continue
     const chapter = chapterOf(block)
@@ -148,16 +178,22 @@ export function generateCloze(bookId: string, blocks: BlockRow[], options: Cloze
       for (const term of terms) {
         const pool = pools.get(poolKey(term)) ?? new Map()
         pools.set(poolKey(term), pool)
-        const entry = pool.get(term.key) ?? { term, chapters: new Set<string>() }
+        const entry = pool.get(term.key) ?? { term, chapters: new Set<string>(), count: 0 }
         entry.chapters.add(chapter)
+        entry.count++
         pool.set(term.key, entry)
       }
     }
   }
+  // A capitalised word seen only once is more likely emphasis than a real acronym.
+  const acronyms = pools.get('acronym')
+  for (const [key, entry] of acronyms ?? []) if (entry.count < 2) acronyms!.delete(key)
 
   // 2. For each sentence, blank one term that has three good wrong options.
   const questions: QuestionRow[] = []
   const perBlock = new Map<number, number>()
+  const answerUse = new Map<string, number>()
+  const answerKeyOf = (term: Term) => `${poolKey(term)}|${term.key}`
   for (const { block, sentence, terms, chapter } of candidates) {
     if ((perBlock.get(block.index) ?? 0) >= perPassage) continue
     const lowerSentence = sentence.toLowerCase()
@@ -168,16 +204,27 @@ export function generateCloze(bookId: string, blocks: BlockRow[], options: Cloze
       // An acronym spelled out in the same sentence gives itself away.
       if (term.kind === 'acronym' && lowerSentence.includes(`(${term.text.toLowerCase()})`)) continue
       if (term.text.length > sentence.length / 2) continue
+      if (!pools.get(poolKey(term))?.has(term.key)) continue
+      if ((answerUse.get(answerKeyOf(term)) ?? 0) >= perAnswer) continue
 
       const random = seededRandom(sentenceSeed ^ hashString(term.text))
       const pool = [...(pools.get(poolKey(term))?.values() ?? [])].filter(
         ({ term: other }) => !related(other.key, term.key) && !lowerSentence.includes(other.text.toLowerCase()),
       )
-      // Prefer wrong options from the same chapter: they are more plausible.
-      const sameChapter = shuffle(pool.filter((p) => p.chapters.has(chapter)), random)
-      const elsewhere = shuffle(pool.filter((p) => !p.chapters.has(chapter)), random)
+      // Years and numbers: pick from values close to the answer (1998 → 1996, 1999…).
+      // Names: prefer the same chapter, where they are more plausible.
+      const ordered =
+        term.kind === 'year' || term.kind === 'number'
+          ? shuffle(
+              [...pool].sort((a, b) => distance(term, a.term) - distance(term, b.term)).slice(0, 6),
+              random,
+            )
+          : [
+              ...shuffle(pool.filter((p) => p.chapters.has(chapter)), random),
+              ...shuffle(pool.filter((p) => !p.chapters.has(chapter)), random),
+            ]
       const wrong: Term[] = []
-      for (const { term: other } of [...sameChapter, ...elsewhere]) {
+      for (const { term: other } of ordered) {
         if (wrong.some((w) => related(w.key, other.key))) continue
         wrong.push(other)
         if (wrong.length === 3) break
@@ -209,6 +256,7 @@ export function generateCloze(bookId: string, blocks: BlockRow[], options: Cloze
       createdAt: now,
     })
     perBlock.set(block.index, (perBlock.get(block.index) ?? 0) + 1)
+    answerUse.set(answerKeyOf(chosen.term), (answerUse.get(answerKeyOf(chosen.term)) ?? 0) + 1)
   }
   return questions
 }
