@@ -6,15 +6,33 @@ export interface GeminiModel {
   description?: string
 }
 
-export type GeminiErrorKind = 'invalid-key' | 'forbidden' | 'rate-limit' | 'network' | 'server' | 'unknown'
+export type GeminiErrorKind =
+  | 'invalid-key'
+  | 'forbidden'
+  | 'rate-limit'
+  | 'network'
+  | 'server'
+  /** Gemini declined to answer (safety or recitation filters). */
+  | 'blocked'
+  /** Gemini answered, but not in the expected format. */
+  | 'bad-output'
+  | 'unknown'
 
 export class GeminiError extends Error {
   readonly kind: GeminiErrorKind
+  readonly status?: number
+  /** For rate limits: how long Google asked us to wait. */
+  readonly retryAfterMs?: number
+  /** For rate limits: the daily quota is used up, so waiting minutes will not help. */
+  readonly daily?: boolean
 
-  constructor(kind: GeminiErrorKind, message: string) {
+  constructor(kind: GeminiErrorKind, message: string, extra: { status?: number; retryAfterMs?: number; daily?: boolean } = {}) {
     super(message)
     this.name = 'GeminiError'
     this.kind = kind
+    this.status = extra.status
+    this.retryAfterMs = extra.retryAfterMs
+    this.daily = extra.daily
   }
 }
 
@@ -30,7 +48,7 @@ interface ApiErrorBody {
     code?: number
     message?: string
     status?: string
-    details?: { reason?: string }[]
+    details?: { reason?: string; retryDelay?: string; violations?: { quotaId?: string }[] }[]
   }
 }
 
@@ -41,22 +59,34 @@ export async function toGeminiError(response: Response): Promise<GeminiError> {
   } catch {
     // Non-JSON error body: fall back to the HTTP status alone.
   }
-  const message = body.error?.message ?? `HTTP ${response.status}`
-  const reasons = body.error?.details?.map((d) => d.reason) ?? []
+  const status = response.status
+  const message = body.error?.message ?? `HTTP ${status}`
+  const details = body.error?.details ?? []
+  const reasons = details.map((d) => d.reason)
 
-  if (reasons.includes('API_KEY_INVALID') || (response.status === 400 && /api key/i.test(message))) {
-    return new GeminiError('invalid-key', 'Google rejected this API key. Check that you copied the whole key.')
+  if (reasons.includes('API_KEY_INVALID') || (status === 400 && /api key/i.test(message))) {
+    return new GeminiError('invalid-key', 'Google rejected this API key. Check that you copied the whole key.', { status })
   }
-  if (response.status === 401 || response.status === 403) {
-    return new GeminiError('forbidden', `This key is not allowed to use the Gemini API: ${message}`)
+  if (status === 401 || status === 403) {
+    return new GeminiError('forbidden', `This key is not allowed to use the Gemini API: ${message}`, { status })
   }
-  if (response.status === 429) {
-    return new GeminiError('rate-limit', 'Too many requests for now (free-tier limit). Try again later.')
+  if (status === 429) {
+    const delay = details.find((d) => d.retryDelay)?.retryDelay
+    const seconds = delay ? Number.parseFloat(delay) : NaN
+    const quotaIds = details.flatMap((d) => d.violations ?? []).map((v) => v.quotaId ?? '')
+    const daily = quotaIds.some((id) => /per ?day/i.test(id))
+    return new GeminiError(
+      'rate-limit',
+      daily
+        ? "Today's free Gemini limit is used up. Finished parts are saved; continue tomorrow."
+        : 'Too many requests for now (free-tier limit).',
+      { status, daily, ...(Number.isFinite(seconds) ? { retryAfterMs: Math.ceil(seconds * 1000) } : {}) },
+    )
   }
-  if (response.status >= 500) {
-    return new GeminiError('server', `Gemini is having problems right now: ${message}`)
+  if (status >= 500) {
+    return new GeminiError('server', `Gemini is having problems right now: ${message}`, { status })
   }
-  return new GeminiError('unknown', message)
+  return new GeminiError('unknown', message, { status })
 }
 
 /** Lists the models this key can use for text generation. */
