@@ -156,3 +156,28 @@ export function sampleHandbook(): FixtureOptions {
     ],
   }
 }
+
+/** The handbook plus a chapter of federal laws, with enough names, acronyms and years for questions. */
+export function sampleLawsHandbook(): FixtureOptions {
+  const base = sampleHandbook()
+  return {
+    ...base,
+    title: 'Sample Privacy Handbook with Laws',
+    chapters: [
+      ...base.chapters,
+      {
+        file: 'ch03.xhtml',
+        body: `<section epub:type="chapter" id="ch3">
+<h1>Chapter 3. Federal Privacy Laws</h1>
+<p>The Fair Credit Reporting Act (FCRA) was enacted in 1970 to regulate consumer reporting agencies.</p>
+<p>The Family Educational Rights and Privacy Act (FERPA) was enacted in 1974 and protects student education records.</p>
+<p>The Video Privacy Protection Act (VPPA) was enacted in 1988 after a newspaper published a judge's video rental history.</p>
+<p>The Health Insurance Portability and Accountability Act (HIPAA) was enacted in 1996 and applies to health plans and many health care providers.</p>
+<p>The Children's Online Privacy Protection Act (COPPA) was enacted in 1998 and protects children under 13 years of age.</p>
+<p>The Gramm-Leach-Bliley Act (GLBA) was enacted in 1999 and requires financial institutions to explain their information-sharing practices.</p>
+</section>`,
+      },
+    ],
+    toc: [...(base.toc ?? []), { title: 'Chapter 3. Federal Privacy Laws', href: 'Text/ch03.xhtml' }],
+  }
+}

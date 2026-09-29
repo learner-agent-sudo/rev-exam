@@ -39,8 +39,12 @@ export async function getBook(id: string, database: RevExamDB = db): Promise<Boo
   return database.books.get(id)
 }
 
+/** Deletes a book with its passages, questions and answer history. */
 export async function deleteBook(id: string, database: RevExamDB = db): Promise<void> {
-  await database.transaction('rw', database.books, database.blocks, async () => {
+  const tables = [database.books, database.blocks, database.questions, database.attempts]
+  await database.transaction('rw', tables, async () => {
+    await database.attempts.where('bookId').equals(id).delete()
+    await database.questions.where('bookId').equals(id).delete()
     await database.blocks.where('bookId').equals(id).delete()
     await database.books.delete(id)
   })

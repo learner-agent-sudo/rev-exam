@@ -26,11 +26,49 @@ export interface BlockRow extends Block {
   bookId: string
 }
 
+export type QuestionSource = 'cloze' | 'ai'
+
+export interface QuestionRow {
+  id: string
+  bookId: string
+  /** 'cloze' = fill-in-the-blank made without AI; 'ai' = written by Gemini. */
+  source: QuestionSource
+  stem: string
+  /** Four options; `answer` is the index of the correct one. Shuffled when shown. */
+  options: string[]
+  answer: number
+  /** Why each option is right or wrong (AI questions only). */
+  explanations?: string[]
+  /** Book passages that back the answer (block indexes). */
+  blockIndexes: number[]
+  /** For fill-in-the-blank: the exact sentence from the book, highlighted in feedback. */
+  quote?: string
+  /** First part of the passage's location, used to filter by chapter. */
+  chapter: string
+  /** Which slice of the book an AI question came from, so generation can resume. */
+  chunk?: string
+  model?: string
+  createdAt: number
+  flagged?: boolean
+}
+
+/** One answer given. Only ever added, never changed, so devices can merge them when syncing. */
+export interface AttemptRow {
+  id: string
+  questionId: string
+  bookId: string
+  chosen: number
+  correct: boolean
+  at: number
+}
+
 // All study data lives in the browser's IndexedDB on this device.
 export class RevExamDB extends Dexie {
   settings!: EntityTable<SettingRow, 'key'>
   books!: EntityTable<BookRow, 'id'>
   blocks!: Dexie.Table<BlockRow, [string, number]>
+  questions!: EntityTable<QuestionRow, 'id'>
+  attempts!: EntityTable<AttemptRow, 'id'>
 
   constructor(name = 'rev-exam') {
     super(name)
@@ -40,6 +78,10 @@ export class RevExamDB extends Dexie {
     this.version(2).stores({
       books: 'id, importedAt',
       blocks: '[bookId+index], bookId',
+    })
+    this.version(3).stores({
+      questions: 'id, bookId, [bookId+source]',
+      attempts: 'id, questionId, bookId, at',
     })
   }
 }
