@@ -7,13 +7,16 @@ First target: IAPP **CIPP/US**. Later: China bar exam (法考). See [docs/design
 
 ## Status
 
-Build steps 1–2 of the plan are done:
+Build steps 1–2 of the plan are done, plus a first version of questions and practice:
 
 - Installs on Android and laptop (Chrome), and opens offline
 - Settings: save and check a Gemini API key (stored only on the device)
 - Book: import a DRM-free EPUB, browse its contents, search it, and read it with
   chapter/section and print page numbers (when the EPUB has them)
-- Questions and study modes arrive in the next steps
+- Study: fill-in-the-blank questions made from the book without AI, and exam-style
+  questions written by Gemini and checked by a second Gemini call
+- Practice sessions: one question per screen, then the answer, why each option is right
+  or wrong, and the exact book passage with a link into the reader
 
 ## Using it
 

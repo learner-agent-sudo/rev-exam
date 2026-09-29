@@ -1,6 +1,7 @@
 # Exam Revision Tool — Design (draft)
 
-Status: in progress. Build steps 1–2 done (app shell, book import and reader).
+Status: in progress. Build steps 1–2 done, plus a proof of concept of question
+creation (both kinds) and a basic practice mode.
 Last updated: 2026-09-28
 
 ## 1. Goal
@@ -65,20 +66,29 @@ Practice, mock exams and reading passages then work fully offline.
    Copy-protected (DRM) files are detected and refused with a clear message.
 2. **Tag passages by exam topic.** Gemini assigns each passage to a Body of Knowledge
    topic (e.g. I.B, II.C). The book's chapters do not map 1:1 to the exam topics.
-3. **Generate questions** following the blueprint's question ranges per topic:
-   - single questions (4 options, one correct)
-   - scenario sets: a fact pattern followed by several questions
-   - each question stores: the correct answer, why each option is right or wrong, and
-     the IDs of the source passage(s)
-4. **Check each question** with a second Gemini pass against its passage. Drop it if the
-   answer is not clearly supported or two options could be right. The app also checks
-   in code that any quoted text really appears in the passage.
+3. **Generate questions** (proof of concept done, per chapter; per exam topic once
+   step 3 exists). Two kinds, chosen by the owner on 2026-09-29:
+   - **Exam-style (Gemini):** the book is split into chapter slices (~12,000 characters).
+     Gemini gets the slice with numbered passages (`[P812] …`) and writes 2–6 questions:
+     4 options, one correct, a one-line explanation per option, and the passage numbers
+     that support the answer. Gemini cites numbers instead of quoting, which avoids
+     copyright "recitation" refusals and keeps references exact.
+     Scenario sets (one fact pattern, several questions) are not done yet.
+   - **Fill in the blank (no AI):** a real sentence with a law, agency, acronym, year or
+     number blanked out; wrong options are terms of the same kind from the same book
+     (nearby values for years and numbers). Filters: front/back matter, code, capitals
+     used for emphasis, acronyms seen only once; one term is the answer at most 4 times.
+     Tested on public sample books; good for facts and names, cannot test understanding.
+4. **Check each AI question** with a second Gemini call that answers it independently
+   (temperature 0). It is kept only if that answer matches and the check does not call
+   it ambiguous. Code also rejects malformed questions ("all of the above", duplicate
+   options, passages outside the slice).
 5. **Show references from storage.** The passage shown to the user is always the stored
    book text, so it is exact.
 
-Generation runs in the background with a progress bar, and resumes if interrupted.
-The bank starts at a few hundred questions; more can be generated later, targeted at
-weak topics.
+Generation runs in the background with a progress bar, keeps the screen awake, saves
+after each slice, waits out short rate limits, stops at the daily free limit, and
+resumes where it stopped.
 
 ## 5. Sync (proposed: Google Drive)
 
@@ -167,9 +177,10 @@ the laptop's question bank as soon as practice mode exists.
 
 1. ✅ App shell: installable, works offline, Settings screen for the Gemini key
 2. ✅ EPUB import, contents, search and a book reader view
-3. Body of Knowledge data and passage tagging
-4. Question generation and checking
-5. Practice mode with passages (phone-first)
+3. Body of Knowledge data and passage tagging, and a "topics your book barely covers" view
+   (the owner's book is an older edition)
+4. 🟡 Question generation and checking: proof of concept done (by chapter, both kinds)
+5. 🟡 Practice mode with passages (phone-first): basic version done (flag, results)
 6. Google Drive sync
 7. Exam mode with results by topic
 8. Revision features: notebook, confidence, spaced review, weak areas
