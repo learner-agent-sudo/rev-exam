@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
-import { db, type BookRow, type QuestionRow } from '../db/db'
+import { loadAllBlocks } from '../book/store'
+import type { BookRow, QuestionRow } from '../db/db'
 import { generateJson } from '../gemini/generate'
 import { GeminiError } from '../gemini/models'
 import { chunkBook, generateForChunk, type Chunk, type ChunkResult } from './ai'
@@ -139,7 +140,7 @@ export function isGenerating(p: JobProgress = progress): boolean {
 
 /** Chunks of these chapters that do not have AI questions yet. */
 export async function pendingChunks(bookId: string, chapters: string[]): Promise<Chunk[]> {
-  const blocks = await db.blocks.where('bookId').equals(bookId).toArray()
+  const blocks = await loadAllBlocks(bookId)
   const { doneChunks } = await bankStats(bookId)
   return chunkBook(blocks).filter((c) => chapters.includes(c.chapter) && !doneChunks.has(c.key))
 }

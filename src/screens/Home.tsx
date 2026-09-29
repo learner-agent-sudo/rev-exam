@@ -3,6 +3,7 @@ import { isInstalled, useInstallPrompt } from '../app/device'
 import { href } from '../app/router'
 import { listBooks } from '../book/store'
 import type { BookRow } from '../db/db'
+import { bankStats, type BankStats } from '../questions/store'
 import { useSettings } from '../settings/useSettings'
 
 export function Home() {
@@ -11,10 +12,20 @@ export function Home() {
   const installed = isInstalled()
   const hasKey = Boolean(settings.geminiApiKey)
   const [books, setBooks] = useState<BookRow[] | null>(null)
+  const [stats, setStats] = useState<BankStats | null>(null)
   useEffect(() => {
-    listBooks().then(setBooks)
+    let active = true
+    listBooks().then(async (list) => {
+      if (!active) return
+      setBooks(list)
+      if (list[0]) setStats(await bankStats(list[0].id))
+    })
+    return () => {
+      active = false
+    }
   }, [])
   const book = books?.[0]
+  const questionCount = stats ? stats.ai + stats.cloze : 0
 
   return (
     <div className="page">
@@ -62,7 +73,7 @@ export function Home() {
                 </>
               ) : (
                 <>
-                  Needed later to create questions from your book.
+                  Needed for exam-style questions written by Gemini. Fill-in-the-blank questions work without it.
                   <div className="row">
                     <a className="btn btn-quiet" href={href('settings')}>
                       Open Settings
@@ -93,9 +104,26 @@ export function Home() {
               )}
             </div>
           </li>
-          <li className="later">
+          <li className={questionCount ? 'done' : book ? '' : 'later'}>
             <span className="step-title">Create questions</span>
-            <div className="step-body">Coming in a later build step.</div>
+            <div className="step-body">
+              {questionCount ? (
+                <>
+                  {questionCount.toLocaleString()} questions ready. <a href={href('study')}>Start practising</a>.
+                </>
+              ) : book ? (
+                <>
+                  Fill-in-the-blank (no AI, instant) or exam-style (Gemini).
+                  <div className="row">
+                    <a className="btn btn-quiet" href={href('study')}>
+                      Open Study
+                    </a>
+                  </div>
+                </>
+              ) : (
+                'After importing your book.'
+              )}
+            </div>
           </li>
         </ol>
       </section>

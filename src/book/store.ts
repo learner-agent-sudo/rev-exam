@@ -54,6 +54,11 @@ export async function rememberPosition(id: string, index: number, database: RevE
   await database.books.update(id, { lastReadIndex: index })
 }
 
+/** Every block of a book, in reading order. */
+export async function loadAllBlocks(bookId: string, database: RevExamDB = db): Promise<BlockRow[]> {
+  return database.blocks.where('[bookId+index]').between([bookId, 0], [bookId, Infinity]).toArray()
+}
+
 /** Blocks with start <= index < end, in reading order. */
 export async function loadBlocks(bookId: string, start: number, end: number, database: RevExamDB = db) {
   return database.blocks.where('[bookId+index]').between([bookId, start], [bookId, end]).toArray()

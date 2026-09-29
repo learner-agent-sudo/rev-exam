@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 
 // Tells the user when the app is ready offline, and when a new version can be loaded.
@@ -7,6 +8,13 @@ export function UpdateToast() {
     offlineReady: [offlineReady, setOfflineReady],
     updateServiceWorker,
   } = useRegisterSW()
+
+  // "Ready offline" is just news; let it fade so it never covers answer buttons.
+  useEffect(() => {
+    if (!offlineReady) return
+    const timer = setTimeout(() => setOfflineReady(false), 6000)
+    return () => clearTimeout(timer)
+  }, [offlineReady, setOfflineReady])
 
   if (needRefresh) {
     return (
