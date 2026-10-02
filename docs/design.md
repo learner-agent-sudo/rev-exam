@@ -116,6 +116,22 @@ resumes where it stopped.
 Alternative considered: a hosted database (Supabase/Firebase). It adds another account
 and service to maintain, with no real benefit for a single user.
 
+**First stage, built: a transfer file.** Settings → "Save transfer file" writes the books,
+passages, questions and answers (not the Gemini key or other settings) as gzip-compressed
+JSON; "Load transfer file" on another device merges it in. The merge rules are the ones
+Drive sync will use:
+
+- Books are added whole with their passages; a book whose passages are incomplete in the
+  file is left out. A book already on the device (same id) is left as it is.
+- Answer records are added if new; nothing is ever removed.
+- A question on both devices takes the newest flag (flags record when they changed).
+- Concept-check questions are made from the book as a set, so the newer set replaces the
+  older one and questions dropped from it do not come back.
+- A file from a newer app version is refused rather than misread.
+
+Limits: it is manual, and a book imported separately on each device becomes two copies
+with separate questions and answers (the app says so and the copy not needed can be deleted).
+
 ## 6. Study experience
 
 - **Practice mode:** after each answer, show:
@@ -193,7 +209,8 @@ and service to maintain, with no real benefit for a single user.
 - Claude can test the app with a public-domain book and simulated Gemini replies, but not
   with the real book, the real API key or the real phone. Expect a round of fixes after
   the first real run.
-- Browser storage can be cleared by the user or the system. Drive sync doubles as a backup.
+- Browser storage can be cleared by the user or the system. A saved transfer file is a
+  backup until Drive sync exists; Drive sync will then double as one.
 
 ## 11. Build plan (small pieces, pushed one at a time)
 
@@ -206,7 +223,7 @@ the laptop's question bank as soon as practice mode exists.
    (the owner's book is an older edition)
 4. 🟡 Question generation and checking: proof of concept done (by chapter, both kinds)
 5. 🟡 Practice mode with passages (phone-first): basic version done (flag, results)
-6. Google Drive sync
+6. 🟡 Moving between devices: transfer file done; automatic Google Drive sync next
 7. Exam mode with results by topic
 8. Revision features: notebook, confidence, spaced review, weak areas
 9. China bar exam mode
@@ -214,7 +231,7 @@ the laptop's question bank as soon as practice mode exists.
 
 ## 12. Open items
 
-- [ ] Owner gets a Gemini API key from Google AI Studio
+- [x] Owner gets a Gemini API key from Google AI Studio
 - [x] Owner confirms Google Drive for sync
 - [ ] Get the official CIPP/US Body of Knowledge 2.6.1 and Exam Blueprint 2.5.0
       (in effect since 1 Sept 2025) from iapp.org, for the full per-topic question ranges

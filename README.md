@@ -18,6 +18,9 @@ Build steps 1–2 of the plan are done, plus a first version of questions and pr
   Gemini call
 - Practice sessions: one question per screen, then the answer, why each option is right
   or wrong, and the exact book passage with a link into the reader
+- Moving to another device: Settings → "Save transfer file" saves the book, questions and
+  answers in one file; "Load transfer file" on the other device merges it in (automatic
+  Google Drive sync comes later)
 
 ## Using it
 
@@ -26,6 +29,9 @@ Open the app at **https://learner-agent-sudo.github.io/rev-exam/** in Chrome, th
 1. Install it: Chrome menu ⋮ → "Install app" / "Add to home screen".
 2. Settings → paste a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey) → "Save and check".
 3. Book → choose your textbook's EPUB file (best done on the laptop).
+4. To study on the phone: on the laptop, Settings → "Save transfer file"; move the file
+   across (Google Drive, email or a cable); on the phone, Settings → "Load transfer file".
+   Do the same the other way to bring the phone's practice back.
 
 ## What never goes in this repo
 
