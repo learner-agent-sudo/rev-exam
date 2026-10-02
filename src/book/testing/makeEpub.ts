@@ -177,7 +177,37 @@ export function sampleLawsHandbook(): FixtureOptions {
 <p>The Gramm-Leach-Bliley Act (GLBA) was enacted in 1999 and requires financial institutions to explain their information-sharing practices.</p>
 </section>`,
       },
+      {
+        file: 'ch04.xhtml',
+        body: `<section epub:type="chapter" id="ch4">
+<h1>Chapter 4. Key Privacy Concepts</h1>
+<p>Personal information is any information that relates to an identified or identifiable individual.</p>
+<p>Data minimization is the practice of collecting only the personal information that is needed for a specific purpose.</p>
+<p>Purpose limitation is the principle that information collected for one purpose should not be used for unrelated purposes.</p>
+<p>De-identification is the process of removing or changing information so that it can no longer be linked to a particular person.</p>
+<p>A data breach is an incident in which personal information is accessed or disclosed without authorization.</p>
+<p>Privacy by Design refers to building privacy protections into products and systems from the start.</p>
+<p>Organizations that practise data minimization and purpose limitation reduce the harm a data breach can cause.</p>
+<p>Good de-identification protects personal information, and Privacy by Design makes such safeguards routine.</p>
+<p>Under the Gramm-Leach-Bliley Act, financial institutions must protect the security of customer information.</p>
+</section>`,
+      },
+      {
+        file: 'glossary.xhtml',
+        body: `<section epub:type="glossary" id="glossary">
+<h1>Glossary</h1>
+<p>Consent. A freely given, specific and informed agreement by a person to the use of their information.</p>
+<p>Data controller. An organization that decides why and how personal information is processed.</p>
+<p>Data processor. See also Data controller. An organization that processes personal information on behalf of a controller.</p>
+<p>Opt-in (affirmative consent). A choice model in which information is used only after a person actively agrees.</p>
+</section>`,
+      },
     ],
-    toc: [...(base.toc ?? []), { title: 'Chapter 3. Federal Privacy Laws', href: 'Text/ch03.xhtml' }],
+    toc: [
+      ...(base.toc ?? []),
+      { title: 'Chapter 3. Federal Privacy Laws', href: 'Text/ch03.xhtml' },
+      { title: 'Chapter 4. Key Privacy Concepts', href: 'Text/ch04.xhtml' },
+      { title: 'Glossary', href: 'Text/glossary.xhtml' },
+    ],
   }
 }

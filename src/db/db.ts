@@ -31,13 +31,15 @@ export type QuestionSource = 'cloze' | 'ai'
 export interface QuestionRow {
   id: string
   bookId: string
-  /** 'cloze' = fill-in-the-blank made without AI; 'ai' = written by Gemini. */
+  /** 'cloze' = concept check made without AI (the name is kept for stored data); 'ai' = written by Gemini. */
   source: QuestionSource
+  /** For no-AI questions: which pattern made it (a definition asked either way, or what a law does). */
+  style?: 'define' | 'term' | 'law'
   stem: string
   /** Four options; `answer` is the index of the correct one. Shuffled when shown. */
   options: string[]
   answer: number
-  /** Why each option is right or wrong (AI questions only). */
+  /** Why each option is right or wrong. */
   explanations?: string[]
   /** Book passages that back the answer (block indexes). */
   blockIndexes: number[]

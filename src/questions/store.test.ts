@@ -32,13 +32,15 @@ describe('question store', () => {
         q('q1', { chapter: 'Ch 2', blockIndexes: [50], chunk: '40-60' }),
         q('q2', { chapter: 'Ch 1', blockIndexes: [5], source: 'cloze' }),
         q('q3', { chapter: 'Ch 1', blockIndexes: [6], flagged: true }),
+        q('q4', { chapter: 'Ch 1', blockIndexes: [7], source: 'cloze', style: 'define' }),
       ],
       database,
     )
     const stats = await bankStats('b', database)
-    expect(stats).toMatchObject({ ai: 1, cloze: 1, flagged: 1 })
+    // q2 has no style: it is an old fill-in-the-blank question waiting to be refreshed.
+    expect(stats).toMatchObject({ ai: 1, cloze: 2, flagged: 1, legacy: 1 })
     expect(stats.chapters).toEqual([
-      { chapter: 'Ch 1', ai: 0, cloze: 1 },
+      { chapter: 'Ch 1', ai: 0, cloze: 2 },
       { chapter: 'Ch 2', ai: 1, cloze: 0 },
     ])
     expect([...stats.doneChunks]).toEqual(['40-60'])

@@ -6,7 +6,7 @@ export async function saveQuestions(rows: QuestionRow[], database: RevExamDB = d
 }
 
 /**
- * Stores a fresh set of fill-in-the-blank questions for a book. Their ids are stable,
+ * Stores a fresh set of no-AI concept questions for a book. Their ids are stable,
  * so answer history survives; questions no longer produced are removed.
  */
 export async function replaceClozeQuestions(bookId: string, rows: QuestionRow[], database: RevExamDB = db) {
@@ -23,6 +23,8 @@ export interface BankStats {
   ai: number
   cloze: number
   flagged: number
+  /** No-AI questions from the old fill-in-the-blank generator, replaced on the next refresh. */
+  legacy: number
   /** Chapters in book order with how many usable questions of each kind they have. */
   chapters: { chapter: string; ai: number; cloze: number }[]
   /** Chunk keys that already have AI questions, so generation can skip them. */
@@ -31,10 +33,11 @@ export interface BankStats {
 
 export async function bankStats(bookId: string, database: RevExamDB = db): Promise<BankStats> {
   const questions = await database.questions.where('bookId').equals(bookId).toArray()
-  const stats: BankStats = { ai: 0, cloze: 0, flagged: 0, chapters: [], doneChunks: new Set() }
+  const stats: BankStats = { ai: 0, cloze: 0, flagged: 0, legacy: 0, chapters: [], doneChunks: new Set() }
   const byChapter = new Map<string, { chapter: string; ai: number; cloze: number; first: number }>()
   for (const q of questions) {
     if (q.chunk) stats.doneChunks.add(q.chunk)
+    if (q.source === 'cloze' && !q.style) stats.legacy++
     if (q.flagged) {
       stats.flagged++
       continue
