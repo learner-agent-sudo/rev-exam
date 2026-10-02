@@ -117,6 +117,31 @@ describe('runGeneration', () => {
     ])
   })
 
+  it('moves to the next free model when a daily allowance runs out', async () => {
+    const generate = vi
+      .fn<RunDeps['generate']>()
+      .mockRejectedValueOnce(new GeminiError('rate-limit', 'used up', { daily: true }))
+      .mockResolvedValue({ questions: [question('q')], dropped: 0 })
+    const { d, last } = deps(generate)
+    const models = ['gemini-3.8-flash', 'gemini-3.5-flash-lite']
+    let current = 0
+    d.nextModel = () => ({ used: models[current], next: models[++current] })
+    expect(await runGeneration(chunks.slice(0, 1), d)).toBe('done')
+    expect(last().log.map((e) => e.text)).toEqual([
+      'Part 1 · daily free limit used up for gemini-3.8-flash; continuing with gemini-3.5-flash-lite',
+      'Part 1 · kept 1, dropped 0',
+    ])
+  })
+
+  it('stops with the reset time when every free model is used up', async () => {
+    const { d, last } = deps(async () => {
+      throw new GeminiError('rate-limit', 'used up', { daily: true })
+    })
+    d.nextModel = () => ({ used: 'gemini-3.5-flash-lite' })
+    expect(await runGeneration(chunks, d)).toBe('error')
+    expect(last().message).toMatch(/^Today's free Gemini allowance is used up for every available model\. .* it resets at .+ your time\.$/)
+  })
+
   it('stops when asked', async () => {
     const { d, saved } = deps(async (c) => ({ questions: [question(c.key)], dropped: 0 }), 1)
     expect(await runGeneration(chunks, d)).toBe('stopped')

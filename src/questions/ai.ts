@@ -14,8 +14,12 @@ export interface Chunk {
   chars: number
 }
 
+// Free Gemini allowances are counted in requests per day (as few as ~20 for Flash models),
+// so each request covers a large slice of the book and asks for many questions at once.
+export const CHUNK_CHARS = 36000
+
 /** Groups study passages into chapter-bounded slices of roughly `maxChars`. */
-export function chunkBook(blocks: BlockRow[], maxChars = 12000, minChars = 1500): Chunk[] {
+export function chunkBook(blocks: BlockRow[], maxChars = CHUNK_CHARS, minChars = 4000): Chunk[] {
   const chunks: Chunk[] = []
   let current: Chunk | null = null
   const close = () => {
@@ -44,9 +48,25 @@ export function chunkBook(blocks: BlockRow[], maxChars = 12000, minChars = 1500)
   return chunks
 }
 
-/** About one question per 2,500 characters of text, between 2 and 6. */
+/** About one question per 3,000 characters of text, between 2 and 12. */
 export function questionsWanted(chunk: Chunk): number {
-  return Math.min(6, Math.max(2, Math.round(chunk.chars / 2500)))
+  return Math.min(12, Math.max(2, Math.round(chunk.chars / 3000)))
+}
+
+/** "120-188" → [120, 188]. */
+function rangeOf(key: string): [number, number] | undefined {
+  const m = /^(\d+)-(\d+)$/.exec(key)
+  return m ? [Number(m[1]), Number(m[2])] : undefined
+}
+
+/**
+ * Slices of the book still without AI questions. Passages inside a slice that already has
+ * questions are left out first, so changing the slice size never asks Gemini twice.
+ */
+export function pendingChunks(blocks: BlockRow[], doneKeys: Iterable<string>): Chunk[] {
+  const done = [...doneKeys].map(rangeOf).filter((r): r is [number, number] => !!r)
+  const remaining = blocks.filter((b) => !done.some(([from, to]) => b.index >= from && b.index <= to))
+  return chunkBook(remaining)
 }
 
 const SYSTEM =
@@ -202,6 +222,7 @@ export type Step = 'write' | 'check'
 export interface StepHooks {
   onStep?: (step: Step) => void
   onStats?: (step: Step, stats: CallStats) => void
+  onRequest?: () => void
 }
 
 export async function generateForChunk(
@@ -215,7 +236,7 @@ export async function generateForChunk(
     now?: number
   } & StepHooks,
 ): Promise<ChunkResult> {
-  const { call, apiKey, model, bookId, bookTitle, chunk, now = Date.now(), onStep, onStats } = options
+  const { call, apiKey, model, bookId, bookTitle, chunk, now = Date.now(), onStep, onStats, onRequest } = options
   const count = questionsWanted(chunk)
   onStep?.('write')
   const raw = await call({
@@ -225,6 +246,7 @@ export async function generateForChunk(
     prompt: questionPrompt(bookTitle, chunk, count),
     schema: QUESTION_SCHEMA,
     onStats: (stats) => onStats?.('write', stats),
+    onSent: onRequest,
   })
   const drafts = validateDrafts(raw, chunk)
   const rejected = Math.max(0, count - drafts.length)
@@ -239,6 +261,7 @@ export async function generateForChunk(
     schema: CHECK_SCHEMA,
     temperature: 0,
     onStats: (stats) => onStats?.('check', stats),
+    onSent: onRequest,
   })
   const { kept, dropped } = applyCheck(drafts, check)
   return {

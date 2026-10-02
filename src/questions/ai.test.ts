@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BlockRow } from '../db/db'
 import type { JsonCall } from '../gemini/generate'
-import { applyCheck, chunkBook, generateForChunk, questionsWanted, validateDrafts, type Chunk } from './ai'
+import { applyCheck, chunkBook, generateForChunk, pendingChunks, questionsWanted, validateDrafts, type Chunk } from './ai'
 
 const block = (index: number, chapter: string, chars = 1000, kind: BlockRow['kind'] = 'paragraph'): BlockRow => ({
   bookId: 'b',
@@ -34,7 +34,7 @@ describe('chunkBook', () => {
 
   it('asks for more questions from longer slices', () => {
     const chunk = (chars: number) => ({ chars }) as Chunk
-    expect([1000, 5000, 10000, 30000].map((c) => questionsWanted(chunk(c)))).toEqual([2, 2, 4, 6])
+    expect([1000, 5000, 10000, 30000, 60000].map((c) => questionsWanted(chunk(c)))).toEqual([2, 2, 3, 10, 12])
   })
 })
 
@@ -47,6 +47,20 @@ const good = {
   explanations: ['Correct.', 'Health.', 'Communications.', 'Securities.'],
   sourcePassages: [10],
 }
+
+describe('pendingChunks', () => {
+  const blocks = [1, 2, 3, 4, 5, 6].map((i) => block(i, 'Chapter 1', 10000))
+
+  it('leaves out passages already covered, even by slices of an older size', () => {
+    // Questions exist for 1-2 (an old, smaller slice) and 5-5.
+    const chunks = pendingChunks(blocks, ['1-2', '5-5'])
+    expect(chunks.flatMap((c) => c.blocks.map((b) => b.index))).toEqual([3, 4, 6])
+  })
+
+  it('makes large slices so each request covers more of the book', () => {
+    expect(pendingChunks(blocks, []).map((c) => c.key)).toEqual(['1-3', '4-6'])
+  })
+})
 
 describe('validateDrafts', () => {
   it('keeps well-formed questions and tidies option letters', () => {

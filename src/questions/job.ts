@@ -2,8 +2,9 @@ import { useSyncExternalStore } from 'react'
 import { loadAllBlocks } from '../book/store'
 import type { BookRow, QuestionRow } from '../db/db'
 import { generateJson } from '../gemini/generate'
-import { GeminiError } from '../gemini/models'
-import { chunkBook, generateForChunk, type Chunk, type ChunkResult, type Step, type StepHooks } from './ai'
+import { fallbackModels, GeminiError, listModels } from '../gemini/models'
+import { markUsedUp, nextPacificReset, recordRequest, todayUsage } from '../gemini/quota'
+import { generateForChunk, pendingChunks, type Chunk, type ChunkResult, type Step, type StepHooks } from './ai'
 import type { CallStats } from '../gemini/generate'
 import { bankStats, saveQuestions } from './store'
 
@@ -45,6 +46,19 @@ export interface RunDeps {
   stopped: () => boolean
   update: (progress: Partial<JobProgress>) => void
   now?: () => number
+  /** On a used-up daily allowance: move to the next free model, if there is one. */
+  nextModel?: () => { used: string; next?: string }
+}
+
+/** "3:00 PM" today, or "Fri 3:00 PM" when it is another day. */
+export function resetTimeText(resetAt: number, now = Date.now()): string {
+  const time = new Date(resetAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const sameDay = new Date(resetAt).toDateString() === new Date(now).toDateString()
+  return sameDay ? time : `${new Date(resetAt).toLocaleDateString([], { weekday: 'short' })} ${time}`
+}
+
+export function allUsedUpMessage(now = Date.now()): string {
+  return `Today's free Gemini allowance is used up for every available model. Finished parts are saved; it resets at ${resetTimeText(nextPacificReset(now), now)} your time.`
 }
 
 export const STEP_TEXT: Record<Step, string> = { write: 'Writing questions', check: 'Checking questions' }
@@ -109,6 +123,16 @@ export async function runGeneration(chunks: Chunk[], deps: RunDeps): Promise<Job
         if (!(error instanceof GeminiError)) {
           note(part, `error: ${String(error)}`)
           deps.update({ status: 'error', message: `Something went wrong: ${String(error)}` })
+          return 'error'
+        }
+        if (error.kind === 'rate-limit' && error.daily && deps.nextModel) {
+          const { used, next } = deps.nextModel()
+          if (next) {
+            note(part, `daily free limit used up for ${used}; continuing with ${next}`)
+            continue
+          }
+          note(part, `daily free limit used up for ${used}; no other free model left`)
+          deps.update({ status: 'error', message: allUsedUpMessage(now()), kept, dropped, skipped, step: undefined })
           return 'error'
         }
         if (error.kind === 'rate-limit' && !error.daily && rateWaits < MAX_RATE_WAITS) {
@@ -195,22 +219,39 @@ export function isGenerating(p: JobProgress = progress): boolean {
   return p.status === 'running' || p.status === 'waiting'
 }
 
-/** Chunks of these chapters that do not have AI questions yet. */
-export async function pendingChunks(bookId: string, chapters: string[]): Promise<Chunk[]> {
+/** Parts of these chapters that do not have AI questions yet. */
+export async function chunksToDo(bookId: string, chapters: string[]): Promise<Chunk[]> {
   const blocks = await loadAllBlocks(bookId)
   const { doneChunks } = await bankStats(bookId)
-  return chunkBook(blocks).filter((c) => chapters.includes(c.chapter) && !doneChunks.has(c.key))
+  return pendingChunks(blocks, doneChunks).filter((c) => chapters.includes(c.chapter))
 }
 
 export async function startGeneration(options: { book: BookRow; chapters: string[]; apiKey: string; model: string }) {
   if (isGenerating()) return
   const { book, chapters, apiKey, model } = options
   stopRequested = false
-  const chunks = await pendingChunks(book.id, chapters)
+
+  // The preferred model first, then other free models (each has its own daily allowance),
+  // skipping any already used up today.
+  let models = [model]
+  try {
+    models = fallbackModels(await listModels(apiKey), model)
+  } catch {
+    // Offline or the list failed: just try the preferred model.
+  }
+  const usedUp = todayUsage().usedUp
+  models = models.filter((m) => !usedUp.includes(m))
+  if (!models.length) {
+    update({ status: 'error', bookId: book.id, message: allUsedUpMessage(), log: [] })
+    return
+  }
+  let current = 0
+
+  const chunks = await chunksToDo(book.id, chapters)
   update({
     status: 'running',
     bookId: book.id,
-    model,
+    model: models[0],
     chunksDone: 0,
     chunksTotal: chunks.length,
     kept: 0,
@@ -229,7 +270,24 @@ export async function startGeneration(options: { book: BookRow; chapters: string
   try {
     await runGeneration(chunks, {
       generate: (chunk, hooks) =>
-        generateForChunk({ call: generateJson, apiKey, model, bookId: book.id, bookTitle: book.title, chunk, ...hooks }),
+        generateForChunk({
+          call: generateJson,
+          apiKey,
+          model: models[current],
+          bookId: book.id,
+          bookTitle: book.title,
+          chunk,
+          ...hooks,
+          onRequest: () => recordRequest(models[current]),
+        }),
+      nextModel: () => {
+        const used = models[current]
+        markUsedUp(used)
+        current++
+        const next = models[current]
+        if (next) update({ model: next })
+        return { used, next }
+      },
       save: (rows) => saveQuestions(rows),
       sleep,
       stopped: () => stopRequested,
