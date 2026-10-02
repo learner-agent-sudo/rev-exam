@@ -158,6 +158,13 @@ and service to maintain, with no real benefit for a single user.
 - Use a fast, low-cost ("Flash") model for tagging and generation. Exact model names and
   prices change often; confirm at build time.
 - Use Gemini's structured (JSON) output so questions come back in a fixed format.
+- Speed (2026-10-02, after the owner found generation very slow): Gemini 3 models think at
+  "high" by default. Requests now ask for `thinkingLevel: low` (Gemini 3+) or
+  `thinkingBudget: 0` (2.5 Flash); the two settings must never be mixed. If a model rejects
+  the schema or thinking setting, the request is resent without them. Each request has a
+  150-second limit, so a hung request is retried instead of stalling the job.
+- The progress panel shows the current step with a live timer, the average time per part,
+  and a troubleshooting log of every request (time, tokens in/out/thinking, waits, errors).
 
 ## 9. Stage 2 (later): written answers
 
