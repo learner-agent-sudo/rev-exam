@@ -123,7 +123,8 @@ export async function listModels(apiKey: string, fetchFn: typeof fetch = fetch):
 // general-purpose "Flash" model the key can actually use.
 const SPECIALISED = /lite|image|tts|audio|live|embed|robotics|computer-use/
 
-function versionOf(id: string): number {
+/** The Gemini version in a model id: "gemini-2.5-flash" → 2.5; 0 when there is none. */
+export function versionOf(id: string): number {
   const match = /gemini-(\d+(?:\.\d+)?)/.exec(id)
   return match ? Number(match[1]) : 0
 }

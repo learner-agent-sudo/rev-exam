@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { generateJson, parseJsonText } from './generate'
+import { generateJson, parseJsonText, thinkingFor } from './generate'
 import { GeminiError, toGeminiError } from './models'
 
 function json(body: unknown, status = 200): Response {
@@ -53,6 +53,56 @@ describe('generateJson', () => {
   it('reports network failures', async () => {
     const offline = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('Failed to fetch'))
     await expect(generateJson(request, offline)).rejects.toMatchObject({ kind: 'network' })
+  })
+})
+
+describe('speed settings', () => {
+  it('turns thinking down in the form each model family accepts', () => {
+    expect(thinkingFor('gemini-3-flash')).toEqual({ thinkingLevel: 'low' })
+    expect(thinkingFor('gemini-3.8-flash-preview')).toEqual({ thinkingLevel: 'low' })
+    expect(thinkingFor('gemini-2.5-flash')).toEqual({ thinkingBudget: 0 })
+    expect(thinkingFor('gemini-2.5-pro')).toEqual({ thinkingBudget: 128 })
+    expect(thinkingFor('gemini-2.0-flash')).toBeUndefined()
+  })
+
+  it('sends the thinking setting, and drops it with the schema if the model rejects them', async () => {
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(json({ error: { code: 400, message: 'Unknown name "thinkingLevel"' } }, 400))
+      .mockResolvedValueOnce(answer('{"a":3}'))
+    await expect(generateJson({ ...request, model: 'gemini-3-flash' }, fetchFn)).resolves.toEqual({ a: 3 })
+    const first = JSON.parse(String(fetchFn.mock.calls[0][1]?.body)).generationConfig
+    const second = JSON.parse(String(fetchFn.mock.calls[1][1]?.body)).generationConfig
+    expect(first.thinkingConfig).toEqual({ thinkingLevel: 'low' })
+    expect(second.thinkingConfig).toBeUndefined()
+    expect(second.responseSchema).toBeUndefined()
+  })
+
+  it('gives up on a request that never answers', async () => {
+    const hang = vi.fn<typeof fetch>((_url, init) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+      })
+    })
+    await expect(generateJson({ ...request, timeoutMs: 20 }, hang)).rejects.toMatchObject({
+      kind: 'server',
+      message: 'Gemini did not answer within 0 seconds.',
+    })
+  })
+
+  it('reports time and token counts', async () => {
+    const onStats = vi.fn()
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(
+      json({
+        candidates: [{ content: { parts: [{ text: '{}' }] } }],
+        usageMetadata: { promptTokenCount: 3100, candidatesTokenCount: 900, thoughtsTokenCount: 450 },
+      }),
+    )
+    await generateJson({ ...request, onStats }, fetchFn)
+    expect(onStats).toHaveBeenCalledWith(
+      expect.objectContaining({ promptTokens: 3100, outputTokens: 900, thinkingTokens: 450, simplified: false }),
+    )
+    expect(onStats.mock.calls[0][0].ms).toBeGreaterThanOrEqual(0)
   })
 })
 
