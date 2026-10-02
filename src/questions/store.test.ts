@@ -49,13 +49,17 @@ describe('question store', () => {
   it('replaces fill-in-the-blank questions but keeps flags on the ones that remain', async () => {
     database = new RevExamDB('q-replace')
     await saveQuestions([q('c1', { source: 'cloze' }), q('c2', { source: 'cloze' }), q('a1')], database)
-    await flagQuestion('c1', true, database)
-    await replaceClozeQuestions('b', [q('c1', { source: 'cloze' }), q('c3', { source: 'cloze' })], database)
+    await flagQuestion('c1', true, database, 100)
+    await flagQuestion('c2', true, database, 100)
+    await flagQuestion('c2', false, database, 200)
+    await replaceClozeQuestions('b', [q('c1', { source: 'cloze' }), q('c2', { source: 'cloze' }), q('c3', { source: 'cloze' })], database)
     const all = await database.questions.toArray()
-    expect(all.map((x) => [x.id, !!x.flagged]).sort()).toEqual([
-      ['a1', false],
-      ['c1', true],
-      ['c3', false],
+    expect(all.map((x) => [x.id, !!x.flagged, x.flaggedAt]).sort()).toEqual([
+      ['a1', false, undefined],
+      ['c1', true, 100],
+      // When the flag was cleared is kept too, so another device's older flag does not come back.
+      ['c2', false, 200],
+      ['c3', false, undefined],
     ])
   })
 

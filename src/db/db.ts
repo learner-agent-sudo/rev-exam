@@ -52,6 +52,8 @@ export interface QuestionRow {
   model?: string
   createdAt: number
   flagged?: boolean
+  /** When the flag was last set or cleared, so the newest change wins when devices merge. */
+  flaggedAt?: number
 }
 
 /** One answer given. Only ever added, never changed, so devices can merge them when syncing. */

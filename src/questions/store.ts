@@ -13,9 +13,14 @@ export async function replaceClozeQuestions(bookId: string, rows: QuestionRow[],
   const keep = new Set(rows.map((r) => r.id))
   await database.transaction('rw', database.questions, async () => {
     const existing = await database.questions.where('[bookId+source]').equals([bookId, 'cloze']).toArray()
-    const flagged = new Set(existing.filter((q) => q.flagged).map((q) => q.id))
+    const flags = new Map(existing.filter((q) => q.flaggedAt !== undefined || q.flagged).map((q) => [q.id, q]))
     await database.questions.bulkDelete(existing.filter((q) => !keep.has(q.id)).map((q) => q.id))
-    await database.questions.bulkPut(rows.map((r) => (flagged.has(r.id) ? { ...r, flagged: true } : r)))
+    await database.questions.bulkPut(
+      rows.map((r) => {
+        const old = flags.get(r.id)
+        return old ? { ...r, flagged: old.flagged, flaggedAt: old.flaggedAt } : r
+      }),
+    )
   })
 }
 
@@ -52,8 +57,8 @@ export async function bankStats(bookId: string, database: RevExamDB = db): Promi
   return stats
 }
 
-export async function flagQuestion(id: string, flagged = true, database: RevExamDB = db): Promise<void> {
-  await database.questions.update(id, { flagged })
+export async function flagQuestion(id: string, flagged = true, database: RevExamDB = db, now = Date.now()): Promise<void> {
+  await database.questions.update(id, { flagged, flaggedAt: now })
 }
 
 export async function recordAttempt(question: QuestionRow, chosen: number, database: RevExamDB = db): Promise<AttemptRow> {
