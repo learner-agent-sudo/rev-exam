@@ -3,7 +3,7 @@ import { href } from '../../app/router'
 import { loadAllBlocks } from '../../book/store'
 import type { BookRow } from '../../db/db'
 import { chunkBook, questionsWanted, type Chunk } from '../../questions/ai'
-import { isGenerating, startGeneration, stopGeneration, useGenerationJob } from '../../questions/job'
+import { isGenerating, startGeneration, STEP_TEXT, stopGeneration, useGenerationJob } from '../../questions/job'
 import type { BankStats } from '../../questions/store'
 import { useSettings } from '../../settings/useSettings'
 
@@ -137,8 +137,26 @@ export function AiGenerator({ book, stats }: { book: BookRow; stats: BankStats }
   )
 }
 
+/** Re-renders every second while `active`, for live timers. */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!active) return
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [active])
+  return now
+}
+
+const duration = (ms: number) => {
+  const total = Math.max(0, Math.round(ms / 1000))
+  return total < 60 ? `${total} s` : `${Math.floor(total / 60)} min ${total % 60} s`
+}
+
 function Progress() {
   const job = useGenerationJob()
+  const now = useNow(true)
+  const left = job.avgPartMs ? job.avgPartMs * (job.chunksTotal - job.chunksDone) : undefined
   return (
     <div className="stack" role="status">
       <div className="progress">
@@ -148,10 +166,20 @@ function Progress() {
           {job.chapter ? ` · ${job.chapter}` : ''}
         </span>
       </div>
+      {job.step && job.stepStartedAt && job.status === 'running' && (
+        <p className="small live-step">
+          {STEP_TEXT[job.step]}… {duration(now - job.stepStartedAt)}
+        </p>
+      )}
       <p className="small">
         {plural(job.kept, 'question')} kept · {job.dropped} dropped by the check
         {job.skipped ? ` · ${plural(job.skipped, 'part')} skipped` : ''}
       </p>
+      {left !== undefined && (
+        <p className="muted small">
+          About {duration(job.avgPartMs!)} per part, so roughly {duration(left)} left.
+        </p>
+      )}
       {job.message && <p className="notice notice-info">{job.message}</p>}
       <p className="muted small">Keep this tab open. You can switch to other screens in the app.</p>
       <div>
@@ -159,23 +187,46 @@ function Progress() {
           Stop
         </button>
       </div>
+      <Log />
     </div>
+  )
+}
+
+/** Every request with its time and token counts, so slow runs can be diagnosed from a screenshot. */
+function Log() {
+  const job = useGenerationJob()
+  if (!job.log.length) return null
+  return (
+    <details className="job-log">
+      <summary>Details for troubleshooting</summary>
+      <p className="muted small">Model: {job.model}</p>
+      <ol>
+        {job.log.map((entry, i) => (
+          <li key={i}>
+            <time>{new Date(entry.at).toLocaleTimeString()}</time> {entry.text}
+          </li>
+        ))}
+      </ol>
+    </details>
   )
 }
 
 function Outcome() {
   const job = useGenerationJob()
-  const summary = `${plural(job.kept, 'question')} kept, ${job.dropped} dropped by the check${job.skipped ? `, ${plural(job.skipped, 'part')} skipped` : ''}.`
-  if (job.status === 'error') {
-    return (
-      <p className="notice notice-bad" role="alert">
-        Stopped: {job.message} {summary}
-      </p>
-    )
-  }
+  const took = job.startedAt && job.log.length ? ` Took ${duration(job.log[job.log.length - 1].at - job.startedAt)}.` : ''
+  const summary = `${plural(job.kept, 'question')} kept, ${job.dropped} dropped by the check${job.skipped ? `, ${plural(job.skipped, 'part')} skipped` : ''}.${took}`
   return (
-    <p className="notice notice-ok" role="status">
-      {job.status === 'stopped' ? 'Stopped.' : 'Finished.'} {summary}
-    </p>
+    <>
+      {job.status === 'error' ? (
+        <p className="notice notice-bad" role="alert">
+          Stopped: {job.message} {summary}
+        </p>
+      ) : (
+        <p className="notice notice-ok" role="status">
+          {job.status === 'stopped' ? 'Stopped.' : 'Finished.'} {summary}
+        </p>
+      )}
+      <Log />
+    </>
   )
 }

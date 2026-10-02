@@ -1280,3 +1280,36 @@ ol.review li.bad .mark-icon {
   font-family: var(--font-ui);
   font-size: 0.85rem;
 }
+
+.live-step {
+  font-family: var(--font-ui);
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+details.job-log {
+  margin-top: 4px;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+}
+
+details.job-log summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+}
+
+details.job-log ol {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  max-height: 260px;
+  overflow-y: auto;
+  border-radius: 8px;
+  background: var(--paper-sunk);
+  line-height: 1.5;
+}
+
+details.job-log time {
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}

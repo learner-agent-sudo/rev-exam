@@ -67,6 +67,7 @@ test('definition questions ask about the book’s concepts', async ({ page }) =>
 
 test('exam-style questions from Gemini are checked before they are kept', async ({ page }) => {
   const prompts: string[] = []
+  const configs: { thinkingConfig?: unknown }[] = []
   await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
     const url = route.request().url()
     if (!url.includes(':generateContent')) {
@@ -76,6 +77,7 @@ test('exam-style questions from Gemini are checked before they are kept', async 
     }
     const prompt: string = route.request().postDataJSON().contents[0].parts[0].text
     prompts.push(prompt)
+    configs.push(route.request().postDataJSON().generationConfig)
     const coppa = Number(/\[P(\d+)\] The Children's Online Privacy Protection Act/.exec(prompt)?.[1])
     const reply = prompt.startsWith('Answer each')
       ? { checks: [{ question: 1, answer: 0, ambiguous: false }, { question: 2, answer: 3, ambiguous: false }] }
@@ -97,7 +99,12 @@ test('exam-style questions from Gemini are checked before they are kept', async 
             },
           ],
         }
-    return route.fulfill({ json: { candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] }, finishReason: 'STOP' }] } })
+    return route.fulfill({
+      json: {
+        candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 400, thoughtsTokenCount: 50 },
+      },
+    })
   })
 
   await page.goto('./#/settings')
@@ -111,8 +118,17 @@ test('exam-style questions from Gemini are checked before they are kept', async 
   await expect(page.getByText(/1 part, about 2 questions before the check: 2 requests/)).toBeVisible()
   await page.getByRole('button', { name: 'Create questions' }).click()
 
-  await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toHaveText('Finished. 1 question kept, 1 dropped by the check.')
+  await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toContainText('Finished. 1 question kept, 1 dropped by the check.')
   expect(prompts).toHaveLength(2)
+  // Gemini 3 models are asked to think less, which is what makes them fast enough.
+  expect(configs.map((c) => c.thinkingConfig)).toEqual([{ thinkingLevel: 'low' }, { thinkingLevel: 'low' }])
+  await page.getByText('Details for troubleshooting').click()
+  await expect(page.locator('.job-log')).toContainText('Model: gemini-3-flash')
+  await expect(page.locator('.job-log li')).toHaveText([
+    /Part 1 · Writing questions: \d+\.\d s · tokens 1,200 in, 400 out, 50 thinking$/,
+    /Part 1 · Checking questions: \d+\.\d s · tokens 1,200 in, 400 out, 50 thinking$/,
+    /Part 1 · kept 1, dropped 1$/,
+  ])
   expect(prompts[0]).toContain('Write 2 multiple-choice questions')
   expect(prompts[1]).toContain('Answer each multiple-choice question')
   await expect(page.getByRole('checkbox', { name: /Chapter 3\. Federal Privacy Laws/ })).toBeDisabled()
@@ -154,4 +170,27 @@ test('long chapter names never make the page wider than the screen', async ({ pa
   await expect(page.locator('.chip-plain')).toHaveText(longTitle)
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(0)
+})
+
+test('shows what Gemini is doing while a slow request runs', async ({ page }) => {
+  await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    if (!route.request().url().includes(':generateContent')) {
+      return route.fulfill({
+        json: { models: [{ name: 'models/gemini-3-flash', displayName: 'Gemini 3 Flash', supportedGenerationMethods: ['generateContent'] }] },
+      })
+    }
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+    return route.fulfill({ json: { candidates: [{ content: { parts: [{ text: '{"questions": []}' }] } }] } })
+  })
+  await page.goto('./#/settings')
+  await page.getByLabel('API key', { exact: true }).fill('test-key')
+  await page.getByRole('button', { name: 'Save and check' }).click()
+  await expect(page.getByText('The key works.')).toBeVisible()
+  await importLawsBook(page)
+  await page.goto('./#/study')
+  await page.getByRole('checkbox', { name: /Chapter 3\. Federal Privacy Laws/ }).check()
+  await page.getByRole('button', { name: 'Create questions' }).click()
+
+  await expect(page.locator('.live-step')).toHaveText(/^Writing questions… [1-3] s$/)
+  await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toBeVisible({ timeout: 15_000 })
 })

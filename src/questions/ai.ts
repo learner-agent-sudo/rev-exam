@@ -1,5 +1,5 @@
 import type { BlockRow, QuestionRow } from '../db/db'
-import type { JsonCall } from '../gemini/generate'
+import type { CallStats, JsonCall } from '../gemini/generate'
 import { chapterOf, studyPassages } from './sections'
 
 // Exam-style questions written by Gemini from one slice ("chunk") of the book.
@@ -196,23 +196,50 @@ export interface ChunkResult {
   dropped: number
 }
 
-export async function generateForChunk(options: {
-  call: JsonCall
-  apiKey: string
-  model: string
-  bookId: string
-  bookTitle: string
-  chunk: Chunk
-  now?: number
-}): Promise<ChunkResult> {
-  const { call, apiKey, model, bookId, bookTitle, chunk, now = Date.now() } = options
+/** The two requests made for each part of the book. */
+export type Step = 'write' | 'check'
+
+export interface StepHooks {
+  onStep?: (step: Step) => void
+  onStats?: (step: Step, stats: CallStats) => void
+}
+
+export async function generateForChunk(
+  options: {
+    call: JsonCall
+    apiKey: string
+    model: string
+    bookId: string
+    bookTitle: string
+    chunk: Chunk
+    now?: number
+  } & StepHooks,
+): Promise<ChunkResult> {
+  const { call, apiKey, model, bookId, bookTitle, chunk, now = Date.now(), onStep, onStats } = options
   const count = questionsWanted(chunk)
-  const raw = await call({ apiKey, model, system: SYSTEM, prompt: questionPrompt(bookTitle, chunk, count), schema: QUESTION_SCHEMA })
+  onStep?.('write')
+  const raw = await call({
+    apiKey,
+    model,
+    system: SYSTEM,
+    prompt: questionPrompt(bookTitle, chunk, count),
+    schema: QUESTION_SCHEMA,
+    onStats: (stats) => onStats?.('write', stats),
+  })
   const drafts = validateDrafts(raw, chunk)
   const rejected = Math.max(0, count - drafts.length)
   if (!drafts.length) return { questions: [], dropped: rejected }
 
-  const check = await call({ apiKey, model, system: SYSTEM, prompt: checkPrompt(chunk, drafts), schema: CHECK_SCHEMA, temperature: 0 })
+  onStep?.('check')
+  const check = await call({
+    apiKey,
+    model,
+    system: SYSTEM,
+    prompt: checkPrompt(chunk, drafts),
+    schema: CHECK_SCHEMA,
+    temperature: 0,
+    onStats: (stats) => onStats?.('check', stats),
+  })
   const { kept, dropped } = applyCheck(drafts, check)
   return {
     dropped: rejected + dropped,
