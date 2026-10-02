@@ -194,3 +194,75 @@ test('shows what Gemini is doing while a slow request runs', async ({ page }) =>
   await expect(page.locator('.live-step')).toHaveText(/^Writing questions… [1-3] s$/)
   await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toBeVisible({ timeout: 15_000 })
 })
+
+test('when a model’s daily allowance runs out, carries on with another free model', async ({ page }) => {
+  const calls: string[] = []
+  await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    const url = route.request().url()
+    if (!url.includes(':generateContent')) {
+      return route.fulfill({
+        json: {
+          models: ['gemini-3-flash', 'gemini-3.1-flash-lite'].map((id) => ({
+            name: `models/${id}`,
+            supportedGenerationMethods: ['generateContent'],
+          })),
+        },
+      })
+    }
+    const model = /models\/([^:]+):/.exec(url)![1]
+    calls.push(model)
+    if (model === 'gemini-3-flash') {
+      return route.fulfill({
+        status: 429,
+        json: {
+          error: {
+            code: 429,
+            message: 'You exceeded your current quota.',
+            details: [{ violations: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier' }] }],
+          },
+        },
+      })
+    }
+    const prompt: string = route.request().postDataJSON().contents[0].parts[0].text
+    const coppa = Number(/\[P(\d+)\] The Children's Online Privacy Protection Act/.exec(prompt)?.[1])
+    const reply = prompt.startsWith('Answer each')
+      ? { checks: [{ question: 1, answer: 0, ambiguous: false }] }
+      : {
+          questions: [
+            {
+              stem: 'Which law protects children online?',
+              options: ['COPPA', 'FERPA', 'GLBA', 'VPPA'],
+              correctIndex: 0,
+              explanations: ['Yes.', 'No.', 'No.', 'No.'],
+              sourcePassages: [coppa],
+            },
+          ],
+        }
+    return route.fulfill({ json: { candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] } }] } })
+  })
+
+  await page.goto('./#/settings')
+  await page.getByLabel('API key', { exact: true }).fill('test-key')
+  await page.getByRole('button', { name: 'Save and check' }).click()
+  await expect(page.getByLabel('Preferred model')).toHaveValue('gemini-3-flash')
+  await importLawsBook(page)
+  await page.goto('./#/study')
+  await page.getByRole('checkbox', { name: /Chapter 3\. Federal Privacy Laws/ }).check()
+  await page.getByRole('button', { name: 'Create questions' }).click()
+
+  await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toContainText('Finished. 1 question kept')
+  expect(calls).toEqual(['gemini-3-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-flash-lite'])
+  await page.getByText('Details for troubleshooting').click()
+  await expect(page.locator('.job-log')).toContainText(
+    'daily free limit used up for gemini-3-flash; continuing with gemini-3.1-flash-lite',
+  )
+  await expect(page.locator('.allowance')).toContainText('used up: gemini-3-flash')
+
+  // A second run skips the used-up model straight away.
+  calls.length = 0
+  await page.getByRole('checkbox', { name: /Chapter 4\. Key Privacy Concepts/ }).check()
+  await page.getByRole('button', { name: 'Create questions' }).click()
+  // Chapter 4 has no COPPA passage, so the simulated Gemini's draft is rejected: a distinct result.
+  await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toContainText('Finished. 0 questions kept, 2 dropped')
+  expect(calls).toEqual(['gemini-3.1-flash-lite'])
+})

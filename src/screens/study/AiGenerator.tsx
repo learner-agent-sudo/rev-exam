@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { href } from '../../app/router'
 import { loadAllBlocks } from '../../book/store'
-import type { BookRow } from '../../db/db'
-import { chunkBook, questionsWanted, type Chunk } from '../../questions/ai'
-import { isGenerating, startGeneration, STEP_TEXT, stopGeneration, useGenerationJob } from '../../questions/job'
+import type { BlockRow, BookRow } from '../../db/db'
+import { todayUsage } from '../../gemini/quota'
+import { chunkBook, pendingChunks, questionsWanted, type Chunk } from '../../questions/ai'
+import {
+  isGenerating,
+  resetTimeText,
+  startGeneration,
+  STEP_TEXT,
+  stopGeneration,
+  useGenerationJob,
+} from '../../questions/job'
 import type { BankStats } from '../../questions/store'
 import { useSettings } from '../../settings/useSettings'
 
@@ -11,7 +19,6 @@ const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n ==
 
 interface ChapterPlan {
   chapter: string
-  chunks: Chunk[]
   pending: Chunk[]
 }
 
@@ -19,32 +26,29 @@ export function AiGenerator({ book, stats }: { book: BookRow; stats: BankStats }
   const { settings, loaded } = useSettings()
   const job = useGenerationJob()
   const running = isGenerating(job) && job.bookId === book.id
-  const [chunks, setChunks] = useState<Chunk[] | null>(null)
+  const [blocks, setBlocks] = useState<BlockRow[] | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     let active = true
-    loadAllBlocks(book.id).then((blocks) => active && setChunks(chunkBook(blocks)))
+    loadAllBlocks(book.id).then((all) => active && setBlocks(all))
     return () => {
       active = false
     }
   }, [book.id])
 
+  // Every chapter, in book order, with the parts that still have no AI questions.
   const plan: ChapterPlan[] = useMemo(() => {
+    if (!blocks) return []
     const byChapter = new Map<string, ChapterPlan>()
-    for (const chunk of chunks ?? []) {
-      const entry = byChapter.get(chunk.chapter) ?? { chapter: chunk.chapter, chunks: [], pending: [] }
-      entry.chunks.push(chunk)
-      if (!stats.doneChunks.has(chunk.key)) entry.pending.push(chunk)
-      byChapter.set(chunk.chapter, entry)
-    }
+    for (const chunk of chunkBook(blocks)) byChapter.set(chunk.chapter, { chapter: chunk.chapter, pending: [] })
+    for (const chunk of pendingChunks(blocks, stats.doneChunks)) byChapter.get(chunk.chapter)?.pending.push(chunk)
     return [...byChapter.values()]
-  }, [chunks, stats])
+  }, [blocks, stats])
 
   const aiCount = (chapter: string) => stats.chapters.find((c) => c.chapter === chapter)?.ai ?? 0
   const todo = plan.filter((p) => selected.has(p.chapter)).flatMap((p) => p.pending)
   const requests = todo.length * 2
-  const minutes = Math.max(1, Math.ceil((requests * 7) / 60))
   const expected = todo.reduce((sum, c) => sum + questionsWanted(c), 0)
 
   function toggle(chapter: string) {
@@ -84,7 +88,8 @@ export function AiGenerator({ book, stats }: { book: BookRow; stats: BankStats }
       ) : (
         <>
           {job.bookId === book.id && job.status !== 'idle' && <Outcome />}
-          {chunks === null ? (
+          <Allowance />
+          {blocks === null ? (
             <p className="muted">Loading chapters…</p>
           ) : (
             <>
@@ -112,7 +117,7 @@ export function AiGenerator({ book, stats }: { book: BookRow; stats: BankStats }
                         <span className="chapter-meta">
                           {done
                             ? `Done · ${plural(aiCount(p.chapter), 'question')}`
-                            : `${p.pending.length} of ${plural(p.chunks.length, 'part')} to do · ${plural(aiCount(p.chapter), 'question')}`}
+                            : `${plural(p.pending.length, 'part')} to do · ${plural(aiCount(p.chapter), 'question')} so far`}
                         </span>
                       </label>
                     </li>
@@ -122,8 +127,7 @@ export function AiGenerator({ book, stats }: { book: BookRow; stats: BankStats }
               {todo.length > 0 && (
                 <p className="muted small">
                   {plural(todo.length, 'part')}, about {plural(expected, 'question')} before the check:{' '}
-                  {plural(requests, 'request')} to Gemini, roughly {plural(minutes, 'minute')} on the free tier. Finished
-                  parts are saved, so you can stop and continue later.
+                  {plural(requests, 'request')} to Gemini. Finished parts are saved, so you can stop and continue later.
                 </p>
               )}
               <button className="btn" onClick={start} disabled={todo.length === 0}>
@@ -134,6 +138,29 @@ export function AiGenerator({ book, stats }: { book: BookRow; stats: BankStats }
         </>
       )}
     </section>
+  )
+}
+
+/** Today's free allowance: requests made on this device, used-up models and the reset time. */
+function Allowance() {
+  // Subscribing to the job re-draws this (and re-reads the counts) whenever it reports progress.
+  useGenerationJob()
+  const usage = todayUsage()
+  const counts = Object.entries(usage.requests)
+  return (
+    <div className="allowance small">
+      <p className="muted">
+        Google's free allowance is per model and per day: roughly 20 requests for Flash models and several hundred for
+        Flash-Lite. When one model runs out, the app carries on with the next free model. Allowances reset at{' '}
+        {resetTimeText(usage.resetsAt)} your time.
+      </p>
+      {counts.length > 0 && (
+        <p className="muted">
+          Used today on this device: {counts.map(([model, n]) => `${model} ${n}`).join(' · ')}
+          {usage.usedUp.length > 0 && <> · used up: {usage.usedUp.join(', ')}</>}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -181,7 +208,7 @@ function Progress() {
         </p>
       )}
       {job.message && <p className="notice notice-info">{job.message}</p>}
-      <p className="muted small">Keep this tab open. You can switch to other screens in the app.</p>
+      <p className="muted small">Model: {job.model}. Keep this tab open; you can switch to other screens in the app.</p>
       <div>
         <button className="btn btn-danger" onClick={stopGeneration}>
           Stop

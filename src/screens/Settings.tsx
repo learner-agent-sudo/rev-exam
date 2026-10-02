@@ -133,7 +133,7 @@ export function Settings() {
         {modelOptions.length > 0 && (
           <div className="stack spaced">
             <div>
-              <label htmlFor="model">Model</label>
+              <label htmlFor="model">Preferred model</label>
               <select
                 id="model"
                 value={settings.geminiModel ?? ''}
@@ -147,8 +147,10 @@ export function Settings() {
               </select>
             </div>
             <p className="muted small">
-              A "Flash" model is picked for you: fast, cheap and available on the free tier. On the free tier, Google
-              may use what the app sends (book passages, questions) to improve its products.
+              A "Flash" model is picked for you: fast and good at writing questions. Its free allowance is small (roughly
+              20 requests a day), so when it runs out the app carries on with other free models such as Flash-Lite,
+              which allows far more. On the free tier, Google may use what the app sends (book passages, questions)
+              to improve its products.
             </p>
           </div>
         )}
