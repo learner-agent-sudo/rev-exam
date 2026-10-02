@@ -1,6 +1,6 @@
 import type { BlockRow, QuestionRow } from '../db/db'
 import { hashString, seededRandom, shuffle } from './random'
-import { chapterOf, isStudyPassage } from './sections'
+import { chapterOf, studyPassages } from './sections'
 import { splitSentences } from './sentences'
 
 // Concept questions made without AI, from two patterns textbooks use for ideas:
@@ -267,7 +267,7 @@ const lowerFirst = (text: string) => (/^[A-Z][a-z]/.test(text) ? text.charAt(0).
 
 export function generateConcepts(bookId: string, blocks: BlockRow[], options: ConceptOptions = {}): QuestionRow[] {
   const { perAnswer = 4, now = Date.now() } = options
-  const study = blocks.filter((b) => (b.kind === 'paragraph' || b.kind === 'list-item') && isStudyPassage(b))
+  const study = studyPassages(blocks).filter((b) => b.kind === 'paragraph' || b.kind === 'list-item')
   const sentencesOf = new Map(study.map((b) => [b.index, splitSentences(b.text)]))
   const corpus = study.map((b) => b.text.toLowerCase()).join('\n')
 

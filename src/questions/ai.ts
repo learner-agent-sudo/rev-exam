@@ -1,6 +1,6 @@
 import type { BlockRow, QuestionRow } from '../db/db'
 import type { JsonCall } from '../gemini/generate'
-import { chapterOf, isStudyPassage } from './sections'
+import { chapterOf, studyPassages } from './sections'
 
 // Exam-style questions written by Gemini from one slice ("chunk") of the book.
 // Gemini cites passages by number; the app shows the stored passage text itself,
@@ -31,8 +31,8 @@ export function chunkBook(blocks: BlockRow[], maxChars = 12000, minChars = 1500)
     current = null
   }
 
-  for (const block of blocks) {
-    if (!isStudyPassage(block) || block.text.length < 20) continue
+  for (const block of studyPassages(blocks)) {
+    if (block.text.length < 20) continue
     const chapter = chapterOf(block)
     if (current && (current.chapter !== chapter || current.chars + block.text.length > maxChars)) close()
     current ??= { key: '', chapter, blocks: [], chars: 0 }
