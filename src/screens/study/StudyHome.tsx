@@ -50,10 +50,18 @@ export function StudyHome() {
         <section className="card empty">
           <StudyIcon />
           <h2>Import your book first</h2>
-          <p className="muted">Questions are made from your textbook, so start by importing its EPUB file.</p>
-          <a className="btn" href={href('book')}>
-            Go to Book
-          </a>
+          <p className="muted">
+            Questions are made from your textbook, so start by importing its EPUB file. If you set it up on another
+            device, copy it from there instead.
+          </p>
+          <div className="row">
+            <a className="btn" href={href('book')}>
+              Go to Book
+            </a>
+            <a className="btn btn-quiet" href={href('settings', [], { show: 'transfer' })}>
+              Copy from another device
+            </a>
+          </div>
         </section>
       </div>
     )
@@ -69,7 +77,10 @@ export function StudyHome() {
           <select id="book-pick" value={book.id} onChange={(e) => setBookId(e.target.value)}>
             {books.map((b) => (
               <option key={b.id} value={b.id}>
-                {b.title}
+                {/* Two copies of one book (one imported here, one copied across) are told apart by date. */}
+                {books.filter((x) => x.title === b.title).length > 1
+                  ? `${b.title} · imported ${new Date(b.importedAt).toLocaleDateString()}`
+                  : b.title}
               </option>
             ))}
           </select>

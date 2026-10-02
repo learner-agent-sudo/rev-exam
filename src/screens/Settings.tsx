@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { formatBytes, getStorageStatus, requestPersistentStorage, type StorageStatus } from '../app/device'
+import type { Location } from '../app/router'
 import { GeminiError, listModels, pickDefaultModel, type GeminiModel } from '../gemini/models'
 import { useSettings } from '../settings/useSettings'
+import { TransferCard } from './settings/TransferCard'
 
 type Check =
   | { state: 'idle' }
@@ -9,7 +11,7 @@ type Check =
   | { state: 'ok'; count: number }
   | { state: 'error'; message: string }
 
-export function Settings() {
+export function Settings({ location }: { location: Location }) {
   const { settings, save, clear } = useSettings()
   // null until the user edits the field; until then show the saved key.
   const [keyDraft, setKeyDraft] = useState<string | null>(null)
@@ -21,6 +23,12 @@ export function Settings() {
   useEffect(() => {
     getStorageStatus().then(setStorage)
   }, [])
+
+  // Links such as "Load it in Settings" open the page at that card.
+  const show = location.query.get('show')
+  useEffect(() => {
+    if (show) document.getElementById(show)?.scrollIntoView({ block: 'start' })
+  }, [show])
 
   const keyInput = keyDraft ?? settings.geminiApiKey ?? ''
 
@@ -155,6 +163,8 @@ export function Settings() {
           </div>
         )}
       </section>
+
+      <TransferCard />
 
       <section className="card" aria-labelledby="storage-title">
         <div className="card-head">

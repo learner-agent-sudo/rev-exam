@@ -596,6 +596,10 @@ ol.howto li {
   margin-inline: auto;
 }
 
+.empty .row {
+  justify-content: center;
+}
+
 /* Update / offline-ready toast. */
 .toast {
   position: fixed;
@@ -668,6 +672,21 @@ ol.howto li {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* A file picker dressed as a button: the input inside is hidden, so the label shows focus. */
+label.btn {
+  margin-bottom: 0;
+}
+
+label.btn:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+label.btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ---------- Book: import, contents, search ---------- */

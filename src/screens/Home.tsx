@@ -94,10 +94,14 @@ export function Home() {
                 </>
               ) : (
                 <>
-                  Best done on your laptop: choose the book's EPUB file.
+                  Best done on your laptop: choose the book's EPUB file. Already set up on another device? Copy the
+                  book and its questions from there instead.
                   <div className="row">
                     <a className="btn btn-quiet" href={href('book')}>
                       Import book
+                    </a>
+                    <a className="btn btn-quiet" href={href('settings', [], { show: 'transfer' })}>
+                      Copy from another device
                     </a>
                   </div>
                 </>
