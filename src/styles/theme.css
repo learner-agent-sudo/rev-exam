@@ -981,6 +981,10 @@ mark {
 
 .chip-plain {
   background: transparent;
+  /* Long chapter names wrap instead of pushing the page wider than the phone. */
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .chip-plain::before {

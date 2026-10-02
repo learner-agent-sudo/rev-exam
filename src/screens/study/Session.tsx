@@ -132,7 +132,7 @@ function QuestionCard({
   return (
     <article className="question">
       <div className="row chips">
-        <span className="chip">{question.source === 'ai' ? 'Exam-style' : 'Fill in the blank'}</span>
+        <span className="chip">{question.source === 'ai' ? 'Exam-style' : question.style ? 'Concept check' : 'Fill in the blank'}</span>
         <span className="chip chip-plain">{question.chapter}</span>
       </div>
       <h2 className="stem">

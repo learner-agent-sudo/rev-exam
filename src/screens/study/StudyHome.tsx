@@ -3,7 +3,7 @@ import { href } from '../../app/router'
 import { StudyIcon } from '../../app/icons'
 import { listBooks, loadAllBlocks } from '../../book/store'
 import type { BookRow } from '../../db/db'
-import { generateCloze } from '../../questions/cloze'
+import { generateConcepts } from '../../questions/concepts'
 import { useGenerationJob } from '../../questions/job'
 import { bankStats, replaceClozeQuestions, type BankStats, type SourceFilter } from '../../questions/store'
 import { AiGenerator } from './AiGenerator'
@@ -76,7 +76,7 @@ export function StudyHome() {
         </div>
       )}
       {stats && <PracticeCard book={book} stats={stats} />}
-      {stats && <ClozeCard book={book} stats={stats} onChange={refresh} />}
+      {stats && <ConceptCard book={book} stats={stats} onChange={refresh} />}
       {stats && <AiGenerator book={book} stats={stats} />}
     </div>
   )
@@ -85,7 +85,7 @@ export function StudyHome() {
 const SOURCES: { value: SourceFilter; label: string }[] = [
   { value: 'all', label: 'All questions' },
   { value: 'ai', label: 'Exam-style (Gemini)' },
-  { value: 'cloze', label: 'Fill in the blank' },
+  { value: 'cloze', label: 'Concept check (no AI)' },
 ]
 
 function PracticeCard({ book, stats }: { book: BookRow; stats: BankStats }) {
@@ -105,7 +105,7 @@ function PracticeCard({ book, stats }: { book: BookRow; stats: BankStats }) {
         <span className="chip">{(stats.ai + stats.cloze).toLocaleString()} questions</span>
       </div>
       {stats.ai + stats.cloze === 0 ? (
-        <p className="muted">No questions yet. Create some below: fill-in-the-blank takes a second and needs no AI.</p>
+        <p className="muted">No questions yet. Create some below: the concept check takes a second and needs no AI.</p>
       ) : (
         <>
           <div className="form-grid">
@@ -155,34 +155,41 @@ function PracticeCard({ book, stats }: { book: BookRow; stats: BankStats }) {
   )
 }
 
-function ClozeCard({ book, stats, onChange }: { book: BookRow; stats: BankStats; onChange: () => void }) {
+function ConceptCard({ book, stats, onChange }: { book: BookRow; stats: BankStats; onChange: () => void }) {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
   async function create() {
     setBusy(true)
-    const questions = generateCloze(book.id, await loadAllBlocks(book.id))
+    const questions = generateConcepts(book.id, await loadAllBlocks(book.id))
     await replaceClozeQuestions(book.id, questions)
+    const laws = questions.filter((q) => q.style === 'law').length
     setNotice(
       questions.length
-        ? `Created ${questions.length.toLocaleString()} fill-in-the-blank questions.`
-        : 'No suitable sentences were found in this book.',
+        ? `Created ${questions.length.toLocaleString()} concept questions: ${(questions.length - laws).toLocaleString()} on definitions, ${laws.toLocaleString()} on what laws and agencies do.`
+        : 'No definitions or law descriptions were found in this book. Try the exam-style questions below.',
     )
     setBusy(false)
     onChange()
   }
 
   return (
-    <section className="card" aria-labelledby="cloze-title">
+    <section className="card" aria-labelledby="concept-title">
       <div className="card-head">
-        <h2 id="cloze-title">Fill in the blank</h2>
+        <h2 id="concept-title">Concept check</h2>
         <span className="chip">No AI · works offline</span>
       </div>
       <p className="muted small">
-        Real sentences from your book with a law, agency, acronym, year or number blanked out. The wrong options are
-        similar terms from the same book. Good for memorising names and facts; it cannot test understanding like the
-        exam-style questions below.
+        Built from the book's own definitions and glossary (“Which best describes …?”, “Which term means …?”) and from
+        what it says each law and agency does (“Which law requires …?”). Every wrong option tells you what it really
+        is. It cannot ask scenario or “apply the rule” questions: those need the exam-style questions below.
       </p>
+      {stats.legacy > 0 && (
+        <p className="notice notice-info">
+          You have {stats.legacy.toLocaleString()} old fill-in-the-blank questions. Press “Refresh from the book” to
+          replace them with concept questions.
+        </p>
+      )}
       <div className="row">
         <button className="btn" onClick={create} disabled={busy}>
           {busy ? 'Creating…' : stats.cloze ? 'Refresh from the book' : 'Create from my book'}

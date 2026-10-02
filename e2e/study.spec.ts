@@ -15,21 +15,26 @@ async function answerAndCheckSource(page: Page) {
   await expect(page.locator('figure.source')).toHaveCount(1)
 }
 
-test('fill-in-the-blank questions work without AI, with the book sentence as the reference', async ({ page }) => {
+test('concept questions work without AI, explain every option and cite the book', async ({ page }) => {
   await importLawsBook(page)
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Study' }).click()
   await expect(page.getByText('No questions yet.')).toBeVisible()
 
   await page.getByRole('button', { name: 'Create from my book' }).click()
-  await expect(page.getByRole('status').filter({ hasText: 'fill-in-the-blank questions' })).toContainText(/Created \d+ fill-in-the-blank questions\./)
+  await expect(page.getByRole('status').filter({ hasText: 'concept questions' })).toHaveText(
+    'Created 16 concept questions: 10 on definitions, 6 on what laws and agencies do.',
+  )
 
+  // Chapter 3 has five sentences saying what a law does.
   await page.getByLabel('Questions', { exact: true }).selectOption('cloze')
   await page.getByLabel('Chapter', { exact: true }).selectOption('Chapter 3. Federal Privacy Laws')
   await page.getByRole('link', { name: 'Start practice' }).click()
 
-  await expect(page.getByText('1 / 6')).toBeVisible()
-  await expect(page.locator('.stem .blank')).toHaveCount(1)
+  await expect(page.getByText('1 / 5')).toBeVisible()
+  await expect(page.locator('.stem')).toHaveText(/^Which law .+\?$/)
   await answerAndCheckSource(page)
+  // Every option says what it really is.
+  await expect(page.locator('.option .why')).toHaveCount(4)
   const sentence = await page.locator('figure.source mark').textContent()
   expect(sentence).toMatch(/^The .+ was enacted in \d{4}/)
 
@@ -38,11 +43,26 @@ test('fill-in-the-blank questions work without AI, with the book sentence as the
   await page.goBack()
 
   // The session restarts after leaving it; finish a fresh one.
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 5; i++) {
     await answerAndCheckSource(page)
-    await page.getByRole('button', { name: i === 5 ? 'See results' : 'Next question →' }).click()
+    await page.getByRole('button', { name: i === 4 ? 'See results' : 'Next question →' }).click()
   }
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^\d of 6 correct$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^\d of 5 correct$/)
+})
+
+test('definition questions ask about the book’s concepts', async ({ page }) => {
+  await importLawsBook(page)
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Study' }).click()
+  await page.getByRole('button', { name: 'Create from my book' }).click()
+  await page.getByLabel('Questions', { exact: true }).selectOption('cloze')
+  await page.getByLabel('Chapter', { exact: true }).selectOption('Glossary')
+  await page.getByRole('link', { name: 'Start practice' }).click()
+
+  await expect(page.getByText('1 / 4')).toBeVisible()
+  await expect(page.locator('.stem')).toHaveText(/^Which (of the following best describes|term does the book describe as) “.+”\?$/)
+  await page.locator('.option').first().click()
+  await expect(page.locator('.option.correct .why')).toHaveText(/^This is how the book describes “.+”\.$/)
+  await expect(page.locator('figure.source figcaption')).toContainText('Glossary')
 })
 
 test('exam-style questions from Gemini are checked before they are kept', async ({ page }) => {
@@ -116,4 +136,22 @@ test('exam-style questions from Gemini are checked before they are kept', async 
 
   await page.getByRole('link', { name: 'Back to Study' }).click()
   await expect(page.getByText('No questions yet.')).toBeVisible()
+})
+
+test('long chapter names never make the page wider than the screen', async ({ page }) => {
+  await page.goto('./#/book')
+  const options = sampleLawsHandbook()
+  const longTitle = 'UNIT 1 - INTRODUCTION TO WORLD CULTURES AND GEOGRAPHY AND MANY OTHER LONG WORDS'
+  options.chapters[3].body = options.chapters[3].body.replace('Chapter 4. Key Privacy Concepts', longTitle)
+  options.toc = options.toc!.map((t) => (t.title === 'Chapter 4. Key Privacy Concepts' ? { ...t, title: longTitle } : t))
+  const data = await makeEpub(options)
+  await page.getByLabel('EPUB file').setInputFiles({ name: 'long.epub', mimeType: 'application/epub+zip', buffer: Buffer.from(data) })
+  await expect(page.getByRole('status').filter({ hasText: 'Imported' })).toBeVisible()
+  await page.goto('./#/study')
+  await page.getByRole('button', { name: 'Create from my book' }).click()
+  await page.getByLabel('Chapter', { exact: true }).selectOption(longTitle)
+  await page.getByRole('link', { name: 'Start practice' }).click()
+  await expect(page.locator('.chip-plain')).toHaveText(longTitle)
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(overflow).toBeLessThanOrEqual(0)
 })
