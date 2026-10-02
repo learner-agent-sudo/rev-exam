@@ -13,8 +13,9 @@ Build steps 1–2 of the plan are done, plus a first version of questions and pr
 - Settings: save and check a Gemini API key (stored only on the device)
 - Book: import a DRM-free EPUB, browse its contents, search it, and read it with
   chapter/section and print page numbers (when the EPUB has them)
-- Study: fill-in-the-blank questions made from the book without AI, and exam-style
-  questions written by Gemini and checked by a second Gemini call
+- Study: concept questions made from the book's definitions and from what it says each
+  law does (no AI), and exam-style questions written by Gemini and checked by a second
+  Gemini call
 - Practice sessions: one question per screen, then the answer, why each option is right
   or wrong, and the exact book passage with a link into the reader
 

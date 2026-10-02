@@ -74,11 +74,20 @@ Practice, mock exams and reading passages then work fully offline.
      that support the answer. Gemini cites numbers instead of quoting, which avoids
      copyright "recitation" refusals and keeps references exact.
      Scenario sets (one fact pattern, several questions) are not done yet.
-   - **Fill in the blank (no AI):** a real sentence with a law, agency, acronym, year or
-     number blanked out; wrong options are terms of the same kind from the same book
-     (nearby values for years and numbers). Filters: front/back matter, code, capitals
-     used for emphasis, acronyms seen only once; one term is the answer at most 4 times.
-     Tested on public sample books; good for facts and names, cannot test understanding.
+   - **Concept check (no AI)** — replaced fill-in-the-blank on 2026-10-02 after the owner
+     found blanked names and years too trivial. Built from two patterns:
+     - definitions ("X is a/the/any …", "X refers to/means …", "Things are … that …") and
+       glossary entries ("Term. Definition.", dt/dd pairs), asked as "Which best describes
+       X?" (wrong options: other concepts' definitions) or "Which term does the book
+       describe as …?";
+     - what a law or agency does ("The GLBA … requires …", "was enacted to …",
+       "Under the X, …"), asked as "Which law requires …?".
+     Every wrong option is explained ("This describes …", or what that law does).
+     Filters drop opinions ("is a difficult concept"), dialogue, code, sentence openers
+     ("For he never …"), self-references ("The following example …"), and terms not
+     mentioned again in the book. Checked on 5 public sample books: textbook-style books
+     give real concept questions; novels still give some junk. It cannot ask scenario or
+     application questions; that needs Gemini.
 4. **Check each AI question** with a second Gemini call that answers it independently
    (temperature 0). It is kept only if that answer matches and the check does not call
    it ambiguous. Code also rejects malformed questions ("all of the above", duplicate
