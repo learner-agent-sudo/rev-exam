@@ -74,13 +74,18 @@ export async function toGeminiError(response: Response): Promise<GeminiError> {
     const delay = details.find((d) => d.retryDelay)?.retryDelay
     const seconds = delay ? Number.parseFloat(delay) : NaN
     const quotaIds = details.flatMap((d) => d.violations ?? []).map((v) => v.quotaId ?? '')
-    const daily = quotaIds.some((id) => /per ?day/i.test(id))
+    const retryAfterMs = Number.isFinite(seconds) ? Math.ceil(seconds * 1000) : undefined
+    // A per-day quota, or a wait so long that only tomorrow will help.
+    const daily =
+      quotaIds.some((id) => /per ?day/i.test(id)) ||
+      /per[ _-]?day|daily/i.test(message) ||
+      (retryAfterMs !== undefined && retryAfterMs > 10 * 60_000)
     return new GeminiError(
       'rate-limit',
       daily
         ? "Today's free Gemini limit is used up. Finished parts are saved; continue tomorrow."
         : 'Too many requests for now (free-tier limit).',
-      { status, daily, ...(Number.isFinite(seconds) ? { retryAfterMs: Math.ceil(seconds * 1000) } : {}) },
+      { status, daily, ...(retryAfterMs !== undefined ? { retryAfterMs } : {}) },
     )
   }
   if (status >= 500) {
@@ -131,6 +136,24 @@ export function versionOf(id: string): number {
 
 function isPreview(id: string): boolean {
   return /preview|exp/.test(id)
+}
+
+const NOT_FOR_TEXT = /image|tts|audio|live|embed|robotics|computer-use|gemma|-latest|exp|pro/
+
+/**
+ * Models to use, in order: the preferred one, then the other free text models, newest
+ * Flash-Lite first. Each model has its own free daily allowance (Flash-Lite's is much
+ * larger), so when one runs out the next can carry on.
+ */
+export function fallbackModels(models: GeminiModel[], preferred: string): string[] {
+  const usable = models
+    .map((m) => m.id)
+    .filter((id) => id.includes('flash') && !NOT_FOR_TEXT.test(id) && id !== preferred)
+  const lite = usable.filter((id) => id.includes('lite'))
+  const flash = usable.filter((id) => !id.includes('lite'))
+  const newestFirst = (a: string, b: string) =>
+    versionOf(b) - versionOf(a) || Number(isPreview(a)) - Number(isPreview(b)) || a.length - b.length
+  return [preferred, ...lite.sort(newestFirst), ...flash.sort(newestFirst)]
 }
 
 export function pickDefaultModel(models: GeminiModel[]): string | undefined {

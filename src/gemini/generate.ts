@@ -21,6 +21,8 @@ export interface JsonRequest {
   /** Give up on a request that takes longer than this (default 150 s). */
   timeoutMs?: number
   onStats?: (stats: CallStats) => void
+  /** Called for every request actually sent (each one counts against the daily allowance). */
+  onSent?: () => void
 }
 
 /**
@@ -83,6 +85,7 @@ export async function generateJson<T>(request: JsonRequest, fetchFn: typeof fetc
     // A request that never answers must not stall the whole job.
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
+    request.onSent?.()
     try {
       const response = await fetchFn(`${GEMINI_API_BASE}/models/${encodeURIComponent(request.model)}:generateContent`, {
         method: 'POST',

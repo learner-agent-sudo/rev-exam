@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { GeminiError, listModels, pickDefaultModel, type GeminiModel } from './models'
+import { fallbackModels, GeminiError, listModels, pickDefaultModel, toGeminiError, type GeminiModel } from './models'
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -68,5 +68,37 @@ describe('listModels', () => {
     const error = await listModels('k', fetchFn).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(GeminiError)
     expect(error).toMatchObject({ kind: 'network' })
+  })
+})
+
+describe('fallbackModels', () => {
+  it('tries the preferred model, then free Flash-Lite and Flash models, newest first', () => {
+    const models = [
+      'gemini-2.5-flash',
+      'gemini-3.8-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-3.5-flash-lite',
+      'gemini-3-pro',
+      'gemini-3.8-flash-image',
+      'gemini-flash-latest',
+      'gemma-3-27b-it',
+      'text-embedding-004',
+    ].map(model)
+    expect(fallbackModels(models, 'gemini-3.8-flash')).toEqual([
+      'gemini-3.8-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash',
+    ])
+  })
+})
+
+describe('daily limits', () => {
+  const error = (body: unknown) => toGeminiError(new Response(JSON.stringify(body), { status: 429 }))
+
+  it('spots a used-up daily allowance from the message or a very long wait', async () => {
+    expect(await error({ error: { code: 429, message: 'Quota exceeded: requests per day for this model.' } })).toMatchObject({ daily: true })
+    expect(await error({ error: { code: 429, message: 'Quota exceeded', details: [{ retryDelay: '43200s' }] } })).toMatchObject({ daily: true })
+    expect(await error({ error: { code: 429, message: 'Quota exceeded', details: [{ retryDelay: '31s' }] } })).toMatchObject({ daily: false })
   })
 })
