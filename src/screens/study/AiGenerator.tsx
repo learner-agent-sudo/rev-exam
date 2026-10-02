@@ -48,8 +48,8 @@ export function AiGenerator({ book, stats }: { book: BookRow; stats: BankStats }
 
   const aiCount = (chapter: string) => stats.chapters.find((c) => c.chapter === chapter)?.ai ?? 0
   const todo = plan.filter((p) => selected.has(p.chapter)).flatMap((p) => p.pending)
-  const requests = todo.length * 2
-  const expected = todo.reduce((sum, c) => sum + questionsWanted(c), 0)
+  const wholeBook = plan.flatMap((p) => p.pending)
+  const chaptersDone = plan.filter((p) => !p.pending.length).length
 
   function toggle(chapter: string) {
     setSelected((prev) => {
@@ -60,9 +60,9 @@ export function AiGenerator({ book, stats }: { book: BookRow; stats: BankStats }
     })
   }
 
-  function start() {
+  function start(chapters: string[]) {
     if (!settings.geminiApiKey || !settings.geminiModel) return
-    void startGeneration({ book, chapters: [...selected], apiKey: settings.geminiApiKey, model: settings.geminiModel })
+    void startGeneration({ book, chapters, apiKey: settings.geminiApiKey, model: settings.geminiModel })
   }
 
   const hasKey = Boolean(settings.geminiApiKey && settings.geminiModel)
@@ -93,51 +93,86 @@ export function AiGenerator({ book, stats }: { book: BookRow; stats: BankStats }
             <p className="muted">Loading chapters…</p>
           ) : (
             <>
-              <div className="row chapter-actions">
-                <button className="btn btn-quiet" onClick={() => setSelected(new Set(plan.filter((p) => p.pending.length).map((p) => p.chapter)))}>
-                  Select all not done
-                </button>
-                <button className="btn btn-quiet" onClick={() => setSelected(new Set())}>
-                  Clear
-                </button>
-              </div>
-              <ul className="chapter-list">
-                {plan.map((p) => {
-                  const done = p.pending.length === 0
-                  return (
-                    <li key={p.chapter}>
-                      <label className={done ? 'done' : ''}>
-                        <input
-                          type="checkbox"
-                          checked={selected.has(p.chapter)}
-                          disabled={done}
-                          onChange={() => toggle(p.chapter)}
-                        />
-                        <span className="chapter-name">{p.chapter}</span>
-                        <span className="chapter-meta">
-                          {done
-                            ? `Done · ${plural(aiCount(p.chapter), 'question')}`
-                            : `${plural(p.pending.length, 'part')} to do · ${plural(aiCount(p.chapter), 'question')} so far`}
-                        </span>
-                      </label>
-                    </li>
-                  )
-                })}
-              </ul>
-              {todo.length > 0 && (
-                <p className="muted small">
-                  {plural(todo.length, 'part')}, about {plural(expected, 'question')} before the check:{' '}
-                  {plural(requests, 'request')} to Gemini. Finished parts are saved, so you can stop and continue later.
-                </p>
+              {wholeBook.length === 0 ? (
+                <p className="notice notice-ok">Every part of the book has exam-style questions.</p>
+              ) : (
+                <div className="stack whole-book">
+                  <p className="small">
+                    <Estimate parts={wholeBook} /> Finished parts are saved: if the daily allowance runs out, press the
+                    button again later to carry on where it stopped.
+                  </p>
+                  <div>
+                    <button className="btn" onClick={() => start(plan.map((p) => p.chapter))}>
+                      {chaptersDone ? 'Continue with the rest of the book' : 'Create for the whole book'}
+                    </button>
+                  </div>
+                </div>
               )}
-              <button className="btn" onClick={start} disabled={todo.length === 0}>
-                Create questions
-              </button>
+
+              <details className="chapter-picker">
+                <summary>
+                  Choose chapters instead
+                  <span className="muted"> · {chaptersDone} of {plan.length} chapters done</span>
+                </summary>
+                <div className="row chapter-actions">
+                  <button
+                    className="btn btn-quiet"
+                    onClick={() => setSelected(new Set(plan.filter((p) => p.pending.length).map((p) => p.chapter)))}
+                  >
+                    Select all not done
+                  </button>
+                  <button className="btn btn-quiet" onClick={() => setSelected(new Set())}>
+                    Clear
+                  </button>
+                </div>
+                <ul className="chapter-list">
+                  {plan.map((p) => {
+                    const done = p.pending.length === 0
+                    return (
+                      <li key={p.chapter}>
+                        <label className={done ? 'done' : ''}>
+                          <input
+                            type="checkbox"
+                            checked={selected.has(p.chapter)}
+                            disabled={done}
+                            onChange={() => toggle(p.chapter)}
+                          />
+                          <span className="chapter-name">{p.chapter}</span>
+                          <span className="chapter-meta">
+                            {done
+                              ? `Done · ${plural(aiCount(p.chapter), 'question')}`
+                              : `${plural(p.pending.length, 'part')} to do · ${plural(aiCount(p.chapter), 'question')} so far`}
+                          </span>
+                        </label>
+                      </li>
+                    )
+                  })}
+                </ul>
+                {todo.length > 0 && (
+                  <p className="muted small">
+                    <Estimate parts={todo} />
+                  </p>
+                )}
+                <button className="btn" onClick={() => start([...selected])} disabled={todo.length === 0}>
+                  Create for selected chapters
+                </button>
+              </details>
             </>
           )}
         </>
       )}
     </section>
+  )
+}
+
+/** "3 parts, about 24 questions before the check: 6 requests to Gemini." */
+function Estimate({ parts }: { parts: Chunk[] }) {
+  const questions = parts.reduce((sum, c) => sum + questionsWanted(c), 0)
+  return (
+    <>
+      {plural(parts.length, 'part')}, about {plural(questions, 'question')} before the check:{' '}
+      {plural(parts.length * 2, 'request')} to Gemini.
+    </>
   )
 }
 

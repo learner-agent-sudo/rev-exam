@@ -15,6 +15,14 @@ async function answerAndCheckSource(page: Page) {
   await expect(page.locator('figure.source')).toHaveCount(1)
 }
 
+/** Opens "Choose chapters instead" if needed and ticks a chapter. */
+async function pickChapter(page: Page, name: RegExp) {
+  const picker = page.locator('details.chapter-picker')
+  await picker.waitFor({ state: 'attached' })
+  if ((await picker.getAttribute('open')) === null) await picker.locator('summary').click()
+  await page.getByRole('checkbox', { name }).check()
+}
+
 test('concept questions work without AI, explain every option and cite the book', async ({ page }) => {
   await importLawsBook(page)
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Study' }).click()
@@ -114,9 +122,9 @@ test('exam-style questions from Gemini are checked before they are kept', async 
 
   await importLawsBook(page)
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Study' }).click()
-  await page.getByRole('checkbox', { name: /Chapter 3\. Federal Privacy Laws/ }).check()
+  await pickChapter(page, /Chapter 3\. Federal Privacy Laws/)
   await expect(page.getByText(/1 part, about 2 questions before the check: 2 requests/)).toBeVisible()
-  await page.getByRole('button', { name: 'Create questions' }).click()
+  await page.getByRole('button', { name: 'Create for selected chapters' }).click()
 
   await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toContainText('Finished. 1 question kept, 1 dropped by the check.')
   expect(prompts).toHaveLength(2)
@@ -131,6 +139,7 @@ test('exam-style questions from Gemini are checked before they are kept', async 
   ])
   expect(prompts[0]).toContain('Write 2 multiple-choice questions')
   expect(prompts[1]).toContain('Answer each multiple-choice question')
+  await page.locator('details.chapter-picker > summary').click()
   await expect(page.getByRole('checkbox', { name: /Chapter 3\. Federal Privacy Laws/ })).toBeDisabled()
 
   await page.getByLabel('Questions', { exact: true }).selectOption('ai')
@@ -188,8 +197,8 @@ test('shows what Gemini is doing while a slow request runs', async ({ page }) =>
   await expect(page.getByText('The key works.')).toBeVisible()
   await importLawsBook(page)
   await page.goto('./#/study')
-  await page.getByRole('checkbox', { name: /Chapter 3\. Federal Privacy Laws/ }).check()
-  await page.getByRole('button', { name: 'Create questions' }).click()
+  await pickChapter(page, /Chapter 3\. Federal Privacy Laws/)
+  await page.getByRole('button', { name: 'Create for selected chapters' }).click()
 
   await expect(page.locator('.live-step')).toHaveText(/^Writing questions… [1-3] s$/)
   await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toBeVisible({ timeout: 15_000 })
@@ -247,8 +256,8 @@ test('when a model’s daily allowance runs out, carries on with another free mo
   await expect(page.getByLabel('Preferred model')).toHaveValue('gemini-3-flash')
   await importLawsBook(page)
   await page.goto('./#/study')
-  await page.getByRole('checkbox', { name: /Chapter 3\. Federal Privacy Laws/ }).check()
-  await page.getByRole('button', { name: 'Create questions' }).click()
+  await pickChapter(page, /Chapter 3\. Federal Privacy Laws/)
+  await page.getByRole('button', { name: 'Create for selected chapters' }).click()
 
   await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toContainText('Finished. 1 question kept')
   expect(calls).toEqual(['gemini-3-flash', 'gemini-3.1-flash-lite', 'gemini-3.1-flash-lite'])
@@ -260,9 +269,48 @@ test('when a model’s daily allowance runs out, carries on with another free mo
 
   // A second run skips the used-up model straight away.
   calls.length = 0
-  await page.getByRole('checkbox', { name: /Chapter 4\. Key Privacy Concepts/ }).check()
-  await page.getByRole('button', { name: 'Create questions' }).click()
+  await pickChapter(page, /Chapter 4\. Key Privacy Concepts/)
+  await page.getByRole('button', { name: 'Create for selected chapters' }).click()
   // Chapter 4 has no COPPA passage, so the simulated Gemini's draft is rejected: a distinct result.
   await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toContainText('Finished. 0 questions kept, 2 dropped')
   expect(calls).toEqual(['gemini-3.1-flash-lite'])
+})
+
+test('one click creates questions for the whole book, and continues later from where it stopped', async ({ page }) => {
+  const calls: string[] = []
+  await page.route('https://generativelanguage.googleapis.com/**', async (route) => {
+    if (!route.request().url().includes(':generateContent')) {
+      return route.fulfill({ json: { models: [{ name: 'models/gemini-3-flash', supportedGenerationMethods: ['generateContent'] }] } })
+    }
+    const prompt: string = route.request().postDataJSON().contents[0].parts[0].text
+    calls.push(prompt.startsWith('Answer each') ? 'check' : 'write')
+    const coppa = Number(/\[P(\d+)\] The Children's Online Privacy Protection Act/.exec(prompt)?.[1])
+    const reply = prompt.startsWith('Answer each')
+      ? { checks: [{ question: 1, answer: 0, ambiguous: false }] }
+      : {
+          // Only the chapter with the COPPA passage gets a usable question.
+          questions: [
+            { stem: 'Which law protects children online?', options: ['COPPA', 'FERPA', 'GLBA', 'VPPA'], correctIndex: 0, explanations: ['Yes.', 'No.', 'No.', 'No.'], sourcePassages: [coppa] },
+          ],
+        }
+    return route.fulfill({ json: { candidates: [{ content: { parts: [{ text: JSON.stringify(reply) }] } }] } })
+  })
+  await page.goto('./#/settings')
+  await page.getByLabel('API key', { exact: true }).fill('test-key')
+  await page.getByRole('button', { name: 'Save and check' }).click()
+  await expect(page.getByText('The key works.')).toBeVisible()
+  await importLawsBook(page)
+  await page.goto('./#/study')
+
+  // The chapter list starts folded away; one button covers the whole book.
+  await expect(page.getByRole('checkbox', { name: /Chapter 3/ })).toBeHidden()
+  await expect(page.locator('.whole-book')).toContainText('5 parts, about 10 questions before the check: 10 requests to Gemini.')
+  await page.getByRole('button', { name: 'Create for the whole book' }).click()
+
+  await expect(page.getByRole('status').filter({ hasText: 'Finished.' })).toContainText('Finished. 1 question kept')
+  expect(calls).toEqual(['write', 'write', 'write', 'check', 'write', 'write'])
+  await expect(page.locator('details.chapter-picker > summary')).toContainText('1 of 5 chapters done')
+  // Parts that produced no questions are offered again, from where it stopped.
+  await expect(page.getByRole('button', { name: 'Continue with the rest of the book' })).toBeVisible()
+  await expect(page.locator('.whole-book')).toContainText('4 parts')
 })
