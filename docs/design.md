@@ -165,6 +165,15 @@ and service to maintain, with no real benefit for a single user.
   150-second limit, so a hung request is retried instead of stalling the job.
 - The progress panel shows the current step with a live timer, the average time per part,
   and a troubleshooting log of every request (time, tokens in/out/thinking, waits, errors).
+- Free daily allowances (2026-10-02, after the owner used up a day's allowance): free limits
+  are per model, per day, reset at midnight Pacific time, and are small for Flash models
+  (~20 requests/day) but much larger for Flash-Lite (several hundred). So:
+  - the preferred model is tried first; when its daily allowance runs out the job carries on
+    with the other free text models (newest Flash-Lite first) and remembers used-up models
+    until the reset;
+  - each request covers ~36,000 characters and asks for up to 12 questions (was ~12,000 and
+    up to 6), roughly 3× fewer requests per question; parts already covered are never redone;
+  - requests per model are counted per device and shown with the reset time in local time.
 
 ## 9. Stage 2 (later): written answers
 
